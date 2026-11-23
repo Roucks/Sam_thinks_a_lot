@@ -1,6 +1,6 @@
 <div align="center">
 
-![Logo de Sam Thinks a Lot](data/logo.png)
+<img src="data/logo_menus.png" alt="Logo de Sam Thinks a Lot" width="640">
 
 # Sam Thinks a Lot
 
