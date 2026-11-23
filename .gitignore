@@ -1,0 +1,12 @@
+# Archive and local runtime binaries
+*.zip
+code/linux-amd64/
+code/macos-aarch64/
+code/macos-x86_64/
+code/windows-amd64/
+
+# Local editor and generated state
+.DS_Store
+Thumbs.db
+*.class
+*.log
