@@ -1,203 +1,180 @@
-// =========================================================================
-// PESTAÑA: ModalDormir.pde
-// VENTANA FLOTANTE: DECISIÓN "¿QUEDARSE JUGANDO O IRSE A DORMIR?"
-// =========================================================================
-
-// Variables globales de estado del modal
+// Decisión del dormitorio, con las medidas de dibujo y clic en la misma cuadrícula.
 boolean mostrandoModalDormir = false;
-int hoverOpcionModalDormir = 0; // 0 = ninguno, 1 = jugar, 2 = dormir
+int hoverOpcionModalDormir = 0;
 
-// -------------------------------------------------------------------------
-// RENDERIZADO Y DIBUJO DEL MODAL
-// -------------------------------------------------------------------------
-void dibujarModalDormir() {
-  if (mostrandoModalDormir) {
-    pushStyle();
+final float MODAL_DORMIR_W = 664;
+final float MODAL_DORMIR_H = 420;
+final float MODAL_DORMIR_OP_X = 36;
+final float MODAL_DORMIR_OP_W = 592;
+final float MODAL_DORMIR_OP_H = 86;
+final float MODAL_DORMIR_JUGAR_Y = 184;
+final float MODAL_DORMIR_DORMIR_Y = 284;
+final float MODAL_DORMIR_CERRAR_X = 608;
+final float MODAL_DORMIR_CERRAR_Y = 24;
+final float MODAL_DORMIR_CERRAR_LADO = 32;
 
-    // 1. Oscurecer fondo con overlay suave
-    fill(8, 12, 22, 220);
-    noStroke();
-    rectMode(CORNER);
-    rect(0, 0, width, height);
+float origenModalDormirX() { return (width - MODAL_DORMIR_W * escalaX) / 2; }
+float origenModalDormirY() { return (height - MODAL_DORMIR_H * escalaY) / 2; }
 
-    // 2. Tarjeta flotante centrada
-    float modalW = 490.0f * escalaX;
-    float modalH = 320.0f * escalaY;
-    float modalX = (width - modalW) / 2.0f;
-    float modalY = (height - modalH) / 2.0f;
-
-    // Sombra exterior
-    fill(0, 80);
-    rect(modalX + 5, modalY + 7, modalW, modalH, 18);
-
-    // Fondo de la tarjeta (azul oscuro acorde a la interfaz)
-    fill(22, 30, 46);
-    stroke(56, 189, 248);
-    strokeWeight(2.2f * escalaX);
-    rect(modalX, modalY, modalW, modalH, 16);
-
-    // 3. Botón cerrar [X] (esquina superior derecha)
-    float btnCerrarX = modalX + modalW - 28.0f * escalaX;
-    float btnCerrarY = modalY + 24.0f * escalaY;
-    boolean hoverCerrar = dist(mouseX, mouseY, btnCerrarX, btnCerrarY) < 16.0f * escalaX;
-    
-    fill(hoverCerrar ? color(239, 68, 68) : color(71, 85, 105));
-    noStroke();
-    ellipse(btnCerrarX, btnCerrarY, 24.0f * escalaX, 24.0f * escalaX);
-    
-    fill(255);
-    textAlign(CENTER, CENTER);
-    if (fontBold != null) textFont(fontBold);
-    textSize(12.0f * escalaX);
-    text("X", btnCerrarX, btnCerrarY - 1);
-
-    // 4. Encabezado y textos explicativos
-    float tituloY = modalY + 38.0f * escalaY;
-    fill(255);
-    textAlign(CENTER, CENTER);
-    if (fontTitle != null) textFont(fontTitle);
-    else { if (fuenteComic != null) textFont(fuenteComic); }
-    textSize(22.0f * escalaX);
-    text("¿UNA PARTIDA MÁS?", width / 2.0f, tituloY);
-
-    if (fuenteCelular != null) textFont(fuenteCelular);
-    else { if (fontBody != null) textFont(fontBody); }
-    fill(203, 213, 225);
-    textSize(13.0f * escalaX);
-    String sub1 = dia1Terminado ? "Sam se acomoda en la cama con el celular." : "Sam se mete bajo las cobijas con su celular nuevo.";
-    text(sub1, width / 2.0f, modalY + 68.0f * escalaY);
-    
-    fill(148, 163, 184);
-    textSize(11.5f * escalaX);
-    text("Todavía queda un juego por probar... aunque ya le da sueño.", width / 2.0f, modalY + 88.0f * escalaY);
-
-    // 5. Dimensiones base de las opciones
-    float opcW = modalW - 44.0f * escalaX;
-    float opcH = 74.0f * escalaY;
-    float opcX = modalX + 22.0f * escalaX;
-
-    // ===== OPCIÓN 1: QUEDARSE JUGANDO =====
-    float opc1Y = modalY + 114.0f * escalaY;
-    boolean hoverOp1 = (mouseX >= opcX && mouseX <= opcX + opcW && mouseY >= opc1Y && mouseY <= opc1Y + opcH);
-
-    fill(hoverOp1 ? color(30, 42, 62) : color(18, 25, 38));
-    stroke(hoverOp1 ? color(96, 165, 250) : color(51, 65, 85));
-    strokeWeight(hoverOp1 ? 2.2f * escalaX : 1.4f * escalaX);
-    rect(opcX, opc1Y, opcW, opcH, 12);
-
-    // Ícono mando de videojuegos
-    float icon1X = opcX + 34.0f * escalaX;
-    float icon1Y = opc1Y + opcH / 2.0f;
-    noStroke();
-    fill(37, 99, 235, 45);
-    ellipse(icon1X, icon1Y, 34.0f * escalaX, 34.0f * escalaX);
-
-    fill(hoverOp1 ? color(96, 165, 250) : color(147, 197, 253));
-    rect(icon1X - 11.0f * escalaX, icon1Y - 7.0f * escalaY, 22.0f * escalaX, 14.0f * escalaY, 4.0f * escalaX);
-    fill(24, 32, 47);
-    rect(icon1X - 7.5f * escalaX, icon1Y - 4.0f * escalaY, 5.0f * escalaX, 8.0f * escalaY, 1);
-    rect(icon1X - 9.0f * escalaX, icon1Y - 2.5f * escalaY, 8.0f * escalaX, 5.0f * escalaY, 1);
-    fill(248, 113, 113);
-    ellipse(icon1X + 4.0f * escalaX, icon1Y + 2.0f * escalaY, 3.5f * escalaX, 3.5f * escalaX);
-    fill(250, 204, 21);
-    ellipse(icon1X + 7.5f * escalaX, icon1Y - 2.0f * escalaY, 3.5f * escalaX, 3.5f * escalaX);
-
-    // Textos Opción 1
-    textAlign(LEFT, CENTER);
-    fill(hoverOp1 ? color(255) : color(226, 232, 240));
-    if (fontBold != null) textFont(fontBold);
-    else { if (fuenteComic != null) textFont(fuenteComic); }
-    textSize(15.0f * escalaX);
-    text("Jugar un rato más", opcX + 62.0f * escalaX, opc1Y + 24.0f * escalaY);
-
-    fill(148, 163, 184);
-    if (fuenteCelular != null) textFont(fuenteCelular);
-    else { if (fontBody != null) textFont(fontBody); }
-    textSize(11.5f * escalaX);
-    text("«Una más y ya. Esta sí es la última.»", opcX + 62.0f * escalaX, opc1Y + 48.0f * escalaY);
-
-    // ===== OPCIÓN 2: IRSE A DORMIR =====
-    float opc2Y = modalY + 202.0f * escalaY;
-    boolean hoverOp2 = (mouseX >= opcX && mouseX <= opcX + opcW && mouseY >= opc2Y && mouseY <= opc2Y + opcH);
-
-    fill(hoverOp2 ? color(18, 48, 38) : color(16, 32, 27));
-    stroke(hoverOp2 ? color(52, 211, 153) : color(34, 197, 94));
-    strokeWeight(hoverOp2 ? 2.2f * escalaX : 1.4f * escalaX);
-    rect(opcX, opc2Y, opcW, opcH, 12);
-
-    // Ícono luna de noche
-    float icon2X = opcX + 34.0f * escalaX;
-    float icon2Y = opc2Y + opcH / 2.0f;
-    noStroke();
-    fill(16, 185, 129, 45);
-    ellipse(icon2X, icon2Y, 34.0f * escalaX, 34.0f * escalaX);
-
-    fill(250, 204, 21);
-    ellipse(icon2X - 2.0f * escalaX, icon2Y, 16.0f * escalaX, 16.0f * escalaX);
-    fill(hoverOp2 ? color(18, 48, 38) : color(16, 32, 27));
-    ellipse(icon2X + 2.5f * escalaX, icon2Y - 2.5f * escalaY, 14.0f * escalaX, 14.0f * escalaY);
-    fill(255, 235, 130);
-    ellipse(icon2X + 7.0f * escalaX, icon2Y + 4.0f * escalaY, 2.5f * escalaX, 2.5f * escalaX);
-
-    // Textos Opción 2
-    textAlign(LEFT, CENTER);
-    fill(hoverOp2 ? color(255) : color(209, 250, 229));
-    if (fontBold != null) textFont(fontBold);
-    else { if (fuenteComic != null) textFont(fuenteComic); }
-    textSize(15.0f * escalaX);
-    if (dia1Terminado) {
-      text("Irse a dormir", opcX + 62.0f * escalaX, opc2Y + 24.0f * escalaY);
-    } else {
-      text("Irse a dormir", opcX + 62.0f * escalaX, opc2Y + 24.0f * escalaY);
-    }
-
-    fill(110, 231, 183);
-    if (fuenteCelular != null) textFont(fuenteCelular);
-    else { if (fontBody != null) textFont(fontBody); }
-    textSize(11.5f * escalaX);
-    if (dia1Terminado) {
-      text("«Ya me dio sueño. Mañana sigo.»", opcX + 62.0f * escalaX, opc2Y + 48.0f * escalaY);
-    } else {
-      text("«Mañana hay colegio. Mejor me duermo.»", opcX + 62.0f * escalaX, opc2Y + 48.0f * escalaY);
-    }
-
-    // Actualizar estado de hover
-    if (hoverOp1) hoverOpcionModalDormir = 1;
-    else { if (hoverOp2) hoverOpcionModalDormir = 2;
-    else hoverOpcionModalDormir = 0; }
-
-    popStyle();
+int zonaModalDormir() {
+  float x = (mouseX - origenModalDormirX()) / escalaX;
+  float y = (mouseY - origenModalDormirY()) / escalaY;
+  if (x < 0 || x > MODAL_DORMIR_W || y < 0 || y > MODAL_DORMIR_H) return -1;
+  if (x >= MODAL_DORMIR_CERRAR_X && x <= MODAL_DORMIR_CERRAR_X + MODAL_DORMIR_CERRAR_LADO
+      && y >= MODAL_DORMIR_CERRAR_Y && y <= MODAL_DORMIR_CERRAR_Y + MODAL_DORMIR_CERRAR_LADO) return 3;
+  if (x >= MODAL_DORMIR_OP_X && x <= MODAL_DORMIR_OP_X + MODAL_DORMIR_OP_W) {
+    if (y >= MODAL_DORMIR_JUGAR_Y && y <= MODAL_DORMIR_JUGAR_Y + MODAL_DORMIR_OP_H) return 1;
+    if (y >= MODAL_DORMIR_DORMIR_Y && y <= MODAL_DORMIR_DORMIR_Y + MODAL_DORMIR_OP_H) return 2;
   }
+  return 0;
 }
 
-// -------------------------------------------------------------------------
-// PROCESAMIENTO DE CLICS DEL MODAL
-// -------------------------------------------------------------------------
+void dibujarModalDormir() {
+  if (!mostrandoModalDormir) return;
+  int zona = zonaModalDormir();
+  hoverOpcionModalDormir = zona == 1 || zona == 2 ? zona : 0;
+  pushStyle();
+  pushMatrix();
+  rectMode(CORNER);
+  noStroke();
+  fill(10, 14, 31, 184);
+  rect(0, 0, width, height);
+  translate(origenModalDormirX(), origenModalDormirY());
+  scale(escalaX, escalaY);
+
+  fill(5, 10, 24, 170);
+  rect(9, 12, MODAL_DORMIR_W, MODAL_DORMIR_H);
+  fill(76, 44, 40);
+  dibujarCajaPixel(0, 0, MODAL_DORMIR_W, MODAL_DORMIR_H, 8);
+  fill(223, 163, 90);
+  dibujarCajaPixel(4, 4, MODAL_DORMIR_W - 8, MODAL_DORMIR_H - 8, 6);
+  fill(124, 77, 57);
+  dibujarCajaPixel(9, 9, MODAL_DORMIR_W - 18, MODAL_DORMIR_H - 18, 4);
+  fill(20, 28, 53);
+  rect(14, 14, MODAL_DORMIR_W - 28, MODAL_DORMIR_H - 28);
+  fill(34, 46, 77);
+  rect(14, 14, MODAL_DORMIR_W - 28, 141);
+  fill(65, 68, 93);
+  rect(34, 154, MODAL_DORMIR_W - 68, 2);
+
+  for (int i = 0; i < 12; i++) {
+    float x = 44 + (i * 91) % 532;
+    float y = 30 + (i * 29) % 35;
+    fill(255, 215, 141, 100 + 85 * sin(millis() * 0.003f + i));
+    rect(x, y, 3, 3);
+  }
+  fill(255, 212, 128);
+  rect(74, 70, 4, 16);
+  rect(68, 76, 16, 4);
+  rect(586, 74, 4, 12);
+  rect(582, 78, 12, 4);
+
+  if (fuenteComic != null) textFont(fuenteComic);
+  textAlign(CENTER, CENTER);
+  textSize(33);
+  fill(12, 18, 35);
+  text("¿UNA PARTIDA MÁS?", MODAL_DORMIR_W / 2 + 2, 77);
+  fill(255, 228, 165);
+  text("¿UNA PARTIDA MÁS?", MODAL_DORMIR_W / 2, 74);
+
+  if (fontBody != null) textFont(fontBody);
+  fill(249, 240, 229);
+  textSize(17);
+  String escena = dia1Terminado ? "Sam se acomoda en la cama con el celular." : "Sam se mete bajo las cobijas con su celular nuevo.";
+  text(escena, MODAL_DORMIR_W / 2, 114);
+  fill(191, 205, 228);
+  textSize(15);
+  text("Todavía queda un juego por probar… aunque ya le da sueño.", MODAL_DORMIR_W / 2, 139);
+
+  fill(zona == 3 ? color(161, 82, 65) : color(51, 60, 83));
+  dibujarCajaPixel(MODAL_DORMIR_CERRAR_X, MODAL_DORMIR_CERRAR_Y,
+    MODAL_DORMIR_CERRAR_LADO, MODAL_DORMIR_CERRAR_LADO, 4);
+  fill(255, 231, 188);
+  if (fuenteComic != null) textFont(fuenteComic);
+  textSize(17);
+  text("×", MODAL_DORMIR_CERRAR_X + 16, MODAL_DORMIR_CERRAR_Y + 15);
+
+  dibujarOpcionModalDormir(MODAL_DORMIR_JUGAR_Y, true, zona == 1);
+  dibujarOpcionModalDormir(MODAL_DORMIR_DORMIR_Y, false, zona == 2);
+  popMatrix();
+  popStyle();
+}
+
+void dibujarCajaPixel(float x, float y, float w, float h, float esquina) {
+  rect(x, y + esquina, w, h - esquina * 2);
+  rect(x + esquina, y, w - esquina * 2, esquina);
+  rect(x + esquina, y + h - esquina, w - esquina * 2, esquina);
+}
+
+void dibujarOpcionModalDormir(float y, boolean jugar, boolean resaltada) {
+  float x = MODAL_DORMIR_OP_X;
+  int acento = jugar ? color(255, 199, 110) : color(127, 222, 197);
+  fill(8, 14, 31);
+  dibujarCajaPixel(x, y + 5, MODAL_DORMIR_OP_W, MODAL_DORMIR_OP_H, 6);
+  fill(resaltada ? acento : color(70, 90, 124));
+  dibujarCajaPixel(x, y, MODAL_DORMIR_OP_W, MODAL_DORMIR_OP_H, 6);
+  fill(resaltada ? color(51, 66, 101) : color(32, 44, 74));
+  dibujarCajaPixel(x + 2, y + 2, MODAL_DORMIR_OP_W - 4, MODAL_DORMIR_OP_H - 4, 5);
+  fill(acento);
+  rect(x + 2, y + 9, 3, MODAL_DORMIR_OP_H - 18);
+  fill(18, 27, 52);
+  dibujarCajaPixel(x + 18, y + 16, 54, 54, 6);
+  dibujarIconoModalDormir(x + 45, y + 43, jugar, acento);
+
+  if (fuenteComic != null) textFont(fuenteComic);
+  textAlign(LEFT, CENTER);
+  fill(acento);
+  textSize(23);
+  text(jugar ? "Jugar un rato más" : "Irse a dormir", x + 88, y + 27);
+  if (fontBody != null) textFont(fontBody);
+  fill(218, 228, 243);
+  textSize(16);
+  String dormir = dia1Terminado ? "«Ya me dio sueño. Mañana sigo.»" : "«Mañana hay colegio. Mejor me duermo.»";
+  text(jugar ? "«Una más y ya. Esta sí es la última.»" : dormir, x + 88, y + 57);
+  fill(18, 27, 52);
+  rect(x + MODAL_DORMIR_OP_W - 50, y + 27, 32, 32);
+  fill(acento);
+  textAlign(CENTER, CENTER);
+  textSize(15);
+  text(jugar ? "1" : "2", x + MODAL_DORMIR_OP_W - 34, y + 43);
+}
+
+void dibujarIconoModalDormir(float x, float y, boolean jugar, int acento) {
+  pushMatrix();
+  translate(x, y);
+  fill(acento);
+  if (jugar) {
+    dibujarCajaPixel(-19, -11, 38, 22, 5);
+    fill(42, 49, 80);
+    rect(-13, -2, 14, 4);
+    rect(-8, -7, 4, 14);
+    fill(237, 115, 107);
+    rect(6, 1, 4, 4);
+    fill(231, 250, 227);
+    rect(11, -5, 4, 4);
+  } else {
+    dibujarCajaPixel(-13, -14, 25, 26, 5);
+    fill(18, 27, 52);
+    rect(-2, -16, 17, 13);
+    rect(4, -3, 12, 6);
+    fill(255, 228, 154);
+    rect(10, -11, 4, 4);
+    rect(15, 5, 3, 3);
+  }
+  popMatrix();
+}
+
 boolean procesarClicModalDormir() {
   boolean consumido = false;
   if (mostrandoModalDormir) {
     consumido = true; // Bloquea los clics al fondo del juego mientras el modal esté abierto xd
 
-    float modalW = 490.0f * escalaX;
-    float modalH = 320.0f * escalaY;
-    float modalX = (width - modalW) / 2.0f;
-    float modalY = (height - modalH) / 2.0f;
-
-    // Clic en botón cerrar [X]
-    float btnCerrarX = modalX + modalW - 28.0f * escalaX;
-    float btnCerrarY = modalY + 24.0f * escalaY;
-    if (dist(mouseX, mouseY, btnCerrarX, btnCerrarY) < 18.0f * escalaX) {
+    int zona = zonaModalDormir();
+    if (zona == 3) {
       mostrandoModalDormir = false;
       if (sonidoClic != null) { sonidoClic.amp(0.3f * volMaster); sonidoClic.play(); }
     } else {
-      float opcW = modalW - 44.0f * escalaX;
-      float opcH = 74.0f * escalaY;
-      float opcX = modalX + 22.0f * escalaX;
-      float opc1Y = modalY + 114.0f * escalaY;
-      float opc2Y = modalY + 202.0f * escalaY;
-
-      // Clic en Opción 1: "Jugar un rato más"
-      if (mouseX >= opcX && mouseX <= opcX + opcW && mouseY >= opc1Y && mouseY <= opc1Y + opcH) {
+      if (zona == 1) {
         mostrandoModalDormir = false;
         modificarBienestar(-15, width / 2.0f, height / 2.0f - 40.0f * escalaY);
         modificarReputacion(-8, width / 2.0f, height / 2.0f - 80.0f * escalaY);
@@ -214,7 +191,7 @@ boolean procesarClicModalDormir() {
         }
       } else {
         // Clic en Opción 2: "Irse a dormir"
-        if (mouseX >= opcX && mouseX <= opcX + opcW && mouseY >= opc2Y && mouseY <= opc2Y + opcH) {
+        if (zona == 2) {
           mostrandoModalDormir = false;
           bienestarDigital = min(100, bienestarDigital + 25);
           puntosJugador += 25;
@@ -243,7 +220,7 @@ boolean procesarClicModalDormir() {
           } }
         } else {
           // Clic fuera de la tarjeta: cerrar sin realizar acción
-          if (mouseX < modalX || mouseX > modalX + modalW || mouseY < modalY || mouseY > modalY + modalH) {
+          if (zona < 0) {
             mostrandoModalDormir = false;
           }
         }

@@ -513,7 +513,9 @@ void paGrade() {
       }
     }
   }
-  paPct = 100.0f * ok / (float)(target + extra);
+  float similitud = 100.0f * ok / (float)(target + extra);
+  if (!paChecked || similitud != paPct) reaccionClipAlResultado(similitud >= 50.0f);
+  paPct = similitud;
   paPts = round(paPct * 10.0f);
   paChecked = true;
   if (paPts > paBest[paCur]) paBest[paCur] = paPts;

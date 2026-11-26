@@ -72,7 +72,7 @@ void t3IniciarTituloNivel3() {
 }
 
 void t3DibujarTransicion() {
-  float segundos = (millis() - t3IntroInicio) / 1000.0f;
+  float segundos = ((enPausa ? pausaInicioMs : millis()) - t3IntroInicio) / 1000.0f;
   background(0);
   pushStyle();
   rectMode(CENTER);
@@ -127,7 +127,7 @@ void t3DibujarTransicion() {
     t3DibujarExplosion(segundos - T3_INICIO_EXPLOSION);
   }
   popStyle();
-  if (segundos >= T3_FIN_TRANSICION) {
+  if (!enPausa && segundos >= T3_FIN_TRANSICION) {
     t3EntrarArcade();
   }
 }

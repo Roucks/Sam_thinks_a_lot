@@ -335,6 +335,7 @@ void frutaActualizarFisica() {
           frutaExplotar(px, py, frutaItemTipo[i] + 1, 8 + frutaItemTipo[i]);
         } else {
           frutaPuntaje += 500;
+          reaccionClipAlResultado(true);
           puntosJugador += 25;
           frutaExplotar(px, py, 9, 30);
         }
@@ -427,6 +428,7 @@ void frutaRevisarPerdida() {
       frutaNuevoRecord = true;
       frutaGuardarRecord();
     }
+    reaccionClipAlResultado(frutaNuevoRecord);
   }
 }
 
@@ -551,6 +553,7 @@ void dibujarJuegoFrutas(float w, float h) {
     } else {
       frutaDibujarFondoPantalla(w, h);
 
+      boolean mostrarDerrota = frutaPerdio;
       if (!frutaPerdio) {
         for (int s = 0; s < FRUTA_SUBPASOS; s++) frutaActualizarFisica();
         frutaRevisarPerdida();
@@ -594,7 +597,7 @@ void dibujarJuegoFrutas(float w, float h) {
       frutaDibujarHUD();
       popMatrix();
 
-      if (frutaPerdio) frutaDibujarGameOver();
+      if (mostrarDerrota) frutaDibujarGameOver();
 
       frutaDibujarBotonVolver(w, h);
       popStyle();

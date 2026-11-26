@@ -197,12 +197,20 @@ boolean feriaResultado() {
   return terminado;
 }
 
+void feriaActualizarPantalla() {
+  if (feriaActiva) {
+    if (estadoActual == MENU || (feriaNivel >= 4 && enHome)) feriaSelector();
+    if (feriaResultado()) {
+      if (feriaResultadoInicio == 0) feriaResultadoInicio = millis();
+      if (millis() - feriaResultadoInicio > 9000) feriaSelector();
+    }
+  }
+}
+
 boolean feriaDibujar() {
   boolean atendido = false;
   if (feriaActiva) {
     feriaAplicarPaleta();
-    if (estadoActual == MENU) feriaSelector();
-    if (feriaNivel >= 4 && enHome) feriaSelector();
     if (feriaNivel >= 4) {
       if (feriaNivel == 4) dibujarJuegoParejas(width, height);
       if (feriaNivel == 5) dibujarJuegoPixelArt(width, height);
@@ -210,8 +218,6 @@ boolean feriaDibujar() {
       atendido = true;
     }
     boolean resultado = feriaResultado();
-    if (resultado && feriaResultadoInicio == 0) feriaResultadoInicio = millis();
-    if (resultado && millis() - feriaResultadoInicio > 9000) feriaSelector();
     if (estadoActual == FERIA_GAMER || resultado) {
       atendido = true;
       pushStyle();

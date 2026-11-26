@@ -314,17 +314,25 @@ void activarScreenShake(int frames, float intensidad) {
 }
 
 void desbloquearLogro(int idx) {
-  if (!feriaActiva && idx >= 0 && idx < totalLogros && !logrosDesbloqueados[idx]) {
-    logrosDesbloqueados[idx] = true;
-    guardarLogrosGlobales();
-    int pts = int(logros[idx][3]);
-    logroNotifTexto = "¡Logro desbloqueado: " + logros[idx][1] + "! (+" + pts + " pts)";
-    logroNotifFinTiempo = millis() + 4000;
-    ganarPuntosConPopup(pts, 5, "LOGRO: +" + pts + " PTS", width / 2, 110 * escalaY, color(255, 225, 75));
-    if (!(estadoActual == NIVEL2 && nv2SubEstado == NV2_SUB_JUGANDO)) {
-      if (!reproducirSfx(SFX_LOGRO, 0.6f) && sonidoClic != null) {
-        sonidoClic.amp(0.55f * volMaster);
-        sonidoClic.play();
+  if (!feriaActiva && idx >= 0 && idx < totalLogros) {
+    boolean yaEnPartida = logrosPartidaActual[idx];
+    boolean yaEnGeneral = logrosDesbloqueados[idx];
+    if (!yaEnPartida) {
+      logrosPartidaActual[idx] = true;
+      sincronizarLogrosEnSlotActivo();
+    }
+    if (!yaEnGeneral) {
+      logrosDesbloqueados[idx] = true;
+      guardarLogrosGlobales();
+      int pts = int(logros[idx][3]);
+      logroNotifTexto = "¡Logro desbloqueado: " + logros[idx][1] + "! (+" + pts + " pts)";
+      logroNotifFinTiempo = millis() + 4000;
+      ganarPuntosConPopup(pts, 5, "LOGRO: +" + pts + " PTS", width / 2, 110 * escalaY, color(255, 225, 75));
+      if (!(estadoActual == NIVEL2 && nv2SubEstado == NV2_SUB_JUGANDO)) {
+        if (!reproducirSfx(SFX_LOGRO, 0.6f) && sonidoClic != null) {
+          sonidoClic.amp(0.55f * volMaster);
+          sonidoClic.play();
+        }
       }
     }
   }
@@ -370,17 +378,8 @@ void guardarLogrosGlobales() {
 }
 
 void cargarLogrosGlobales() {
-  try {
-    if (dataFile("logros_globales.txt").exists()) {
-      String[] lineas = loadStrings("logros_globales.txt");
-      if (lineas != null && contarCadenas(lineas) > 0) {
-        for (int i = 0; i < totalLogros && i < lineas[0].length(); i++) {
-          if (leerCaracter(lineas[0], i) == '1') logrosDesbloqueados[i] = true;
-        }
-      }
-    }
-  } catch (Exception error) {
-    println("No se pudieron leer los logros: " + error.getMessage());
+  if (sistemaGuardadoInicializado) {
+    recalcularLogrosReunidos();
   }
 }
 

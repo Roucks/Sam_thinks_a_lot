@@ -63,10 +63,10 @@ void prepararPostPixagramPenaltis() {
 void dibujarInicioPixagram() {
   cargarFotosComunidadPixagram();
   textFont(fontTitle);
-  textSize(14);
+  textSize(17);
   fill(COLOR_TEXT_DARK);
   textAlign(LEFT, TOP);
-  text("Tu Resumen Digital", 12, 8);
+  text("Tu Resumen Digital", 12, 6);
 
   // Tarjeta del jugador más amplia para que todo respire mejor
   fill(COLOR_CARD);
@@ -82,24 +82,24 @@ void dibujarInicioPixagram() {
   }
 
   textFont(fontBold);
-  textSize(11.5f);
+  textSize(15);
   fill(COLOR_TEXT_DARK);
   textAlign(LEFT, TOP);
   text(playerName + " (" + playerHandle + ")", 74, 34);
 
   dibujarIconoCorazon(79, 58, 5.0f, color(55, 145, 85));
-  dibujarIconoEstrella(168, 58, 5.5f, color(195, 140, 20));
+  dibujarIconoEstrella(187, 58, 5.5f, color(195, 140, 20));
   textFont(fontBody);
-  textSize(10.0f);
+  textSize(12);
   fill(color(55, 145, 85));
   text("Bienestar: " + round(bienestarDigital) + "%", 88, 52);
   fill(color(155, 110, 20));
-  text("Reputación: " + reputacionDigital, 177, 52);
+  text("Reputación: " + reputacionDigital, 197, 52);
 
   dibujarIconoEstrella(79, 76, 5.2f, COLOR_PRIMARY);
   fill(COLOR_PRIMARY);
   textFont(fontBold);
-  textSize(10.5f); // Corregido para que no se desborde pero se lea claro
+  textSize(13);
   text("Puntos disponibles: " + puntosJugador + " pts", 88, 70);
 
   // Botón directo al Feed
@@ -108,26 +108,26 @@ void dibujarInicioPixagram() {
   rect(12, 104, pantallaW - 24, 34, 7);
   fill(255);
   textAlign(CENTER, CENTER);
-  textSize(11.0f);
+  textSize(14);
   if (penaltisJugados && !decisionPixagramTomada) {
     dibujarIconoAlerta(26, 121, 6.0f, color(255, 220, 70));
-    text("Ir al Feed (Responder post de Penaltis) >>", pantallaW / 2 + 6, 121);
+    text("Responder el post de penaltis", pantallaW / 2 + 6, 121);
   } else {
-    text("Explorar Feed de la Comunidad (" + totalPixaPosts + " perfiles) >>", pantallaW / 2, 121);
+    text("Explorar el Feed", pantallaW / 2, 121);
   }
 
   // Perfiles destacados de la comunidad (más grandes aprovechando el espacio inferior)
   textFont(fontBold);
-  textSize(11.0f);
+  textSize(14);
   fill(COLOR_TEXT_DARK);
   textAlign(LEFT, TOP);
-  text("Perfiles de la Comunidad (Explora en Feed):", 12, 146);
+  text("Perfiles de la comunidad", 12, 146);
 
   for (int i = 0; i < totalPixaPosts; i++) {
     int col = i % 2;
     int fila = i / 2;
     float cx = 12 + col * ((pantallaW - 30) / 2.0f + 6);
-    float cy = 166 + fila * 52;
+    float cy = 170 + fila * 52;
     float cw = (pantallaW - 30) / 2.0f;
     float ch = 46;
 
@@ -137,156 +137,260 @@ void dibujarInicioPixagram() {
     rect(cx, cy, cw, ch, 6);
 
     textFont(fontBold);
-    textSize(10.0f);
+    textSize(13);
     fill(COLOR_PRIMARY_DARK);
     textAlign(LEFT, TOP);
     text(pixaUsuarios[i], cx + 8, cy + 5);
 
     textFont(fontBody);
-    textSize(9.2f);
+    textSize(12);
     fill(COLOR_TEXT_MUTED);
-    text(pixaCategorias[i], cx + 8, cy + 19);
+    text(pixaCategorias[i], cx + 8, cy + 23);
 
-    int impB = pixaImpactoBienestar[i];
-    textFont(fontBold);
-    textSize(9.2f);
-    fill(impB >= 0 ? color(45, 150, 75) : color(210, 65, 60));
-    text((impB >= 0 ? "+" : "") + impB + " Bienestar", cx + 8, cy + 32);
   }
 }
+final float PIXA_FEED_CUERPO = 15;
+final float PIXA_FEED_INTERLINEA = 19;
+final float PIXA_PEN_IMAGEN_Y = 54;
+final float PIXA_PEN_IMAGEN_H = 135;
+final float PIXA_PEN_LIKE_Y = PIXA_PEN_IMAGEN_Y + PIXA_PEN_IMAGEN_H + 8;
+final float PIXA_PEN_TEXTO_Y = PIXA_PEN_LIKE_Y + 25;
+final float PIXA_COMUNIDAD_TEXTO_Y = 155;
+final float PIXA_ACCION_H = 34;
+final float PIXA_DECISION_BOTONES_Y = 34;
+final float PIXA_DECISION_BOTON_H = 44;
+final float PIXA_DECISION_PASO = 51;
+final float PIXA_DECISION_PANEL_H = 190;
+
+float pixaAnchoTextoAnterior = -1;
+PFont pixaFuenteTextoAnterior;
+String pixaPieAnterior;
+StringList pixaLineasPie;
+String[] pixaComentariosAnteriores = new String[MAX_COMMENTS_POR_POST];
+StringList[] pixaLineasComentarios = new StringList[MAX_COMMENTS_POR_POST];
+String[] pixaDescripcionesAnteriores = new String[TAM_PIXA_FOTOS_POSTS];
+StringList[] pixaLineasDescripciones = new StringList[TAM_PIXA_FOTOS_POSTS];
+
+StringList medirLineasPixagram(String contenido) {
+  pushStyle();
+  textFont(fontBody);
+  textSize(PIXA_FEED_CUERPO);
+  StringList lineas = new StringList();
+  String linea = "";
+  float ancho = pantallaW - 36;
+  for (String palabra : split(contenido, ' ')) {
+    String candidata = linea.isEmpty() ? palabra : linea + " " + palabra;
+    if (!linea.isEmpty() && textWidth(candidata) > ancho) {
+      lineas.append(linea);
+      linea = palabra;
+    } else {
+      linea = candidata;
+    }
+  }
+  lineas.append(linea);
+  popStyle();
+  return lineas;
+}
+
+void actualizarTextoPixagram() {
+  if (pixaAnchoTextoAnterior != pantallaW || pixaFuenteTextoAnterior != fontBody) {
+    pixaAnchoTextoAnterior = pantallaW;
+    pixaFuenteTextoAnterior = fontBody;
+    pixaPieAnterior = null;
+    for (int c = 0; c < MAX_COMMENTS_POR_POST; c++) pixaComentariosAnteriores[c] = null;
+    for (int i = 0; i < TAM_PIXA_FOTOS_POSTS; i++) pixaDescripcionesAnteriores[i] = null;
+  }
+  if (totalFeedPosts > 0) {
+    if (pixaPieAnterior != postCaption[0]) {
+      pixaPieAnterior = postCaption[0];
+      pixaLineasPie = medirLineasPixagram(pixaPieAnterior);
+    }
+    for (int c = 0; c < postCommentCount[0]; c++) {
+      String comentario = postCommentText[0][c];
+      if (pixaComentariosAnteriores[c] != comentario) {
+        pixaComentariosAnteriores[c] = comentario;
+        pixaLineasComentarios[c] = medirLineasPixagram(comentario);
+      }
+    }
+  }
+  for (int i = 0; i < totalPixaPosts; i++) {
+    if (pixaDescripcionesAnteriores[i] != pixaDescripciones[i]) {
+      pixaDescripcionesAnteriores[i] = pixaDescripciones[i];
+      pixaLineasDescripciones[i] = medirLineasPixagram(pixaDescripciones[i]);
+    }
+  }
+}
+
+void dibujarLineasPixagram(StringList lineas, float x, float y) {
+  for (int i = 0; i < lineas.size(); i++) {
+    String linea = lineas.get(i);
+    if (!linea.isEmpty()) text(linea, x, y);
+    y += PIXA_FEED_INTERLINEA;
+  }
+}
+
+float posicionComentariosPixagram(float y) {
+  return y + PIXA_PEN_TEXTO_Y + pixaLineasPie.size() * PIXA_FEED_INTERLINEA + 12;
+}
+
+float posicionDecisionPixagram(float y) {
+  float posicion = posicionComentariosPixagram(y);
+  for (int c = 0; c < postCommentCount[0]; c++) {
+    posicion += 20 + pixaLineasComentarios[c].size() * PIXA_FEED_INTERLINEA + 6;
+  }
+  return posicion + 6;
+}
+
+float altoPostPenaltisPixagram(float y) {
+  return posicionDecisionPixagram(y) - y + (decisionPixagramTomada ? 48 : PIXA_DECISION_PANEL_H + 12);
+}
+
+float posicionAccionesComunidadPixagram(float y, int perfil) {
+  return y + PIXA_COMUNIDAD_TEXTO_Y + pixaLineasDescripciones[perfil].size() * PIXA_FEED_INTERLINEA + 12;
+}
+
+boolean bloqueVisiblePixagram(float y, float h, float arriba, float abajo) {
+  return y + h + 4 >= arriba && y - 4 <= abajo;
+}
+
 void dibujarFeedPixagram(float contentH) {
   cargarFotosComunidadPixagram();
+  actualizarTextoPixagram();
+  float vistaArriba = -scrollYFeed;
+  float vistaAbajo = vistaArriba + contentH;
   float curY = 8;
 
   // --- BLOQUE 1: PUBLICACIÓN DE PENALTIS Y DECISIÓN OBLIGATORIA ---
   if (totalFeedPosts > 0) {
     boolean esDerrota = (goles < 3);
-    float postBoxH = (!decisionPixagramTomada) ? 420 : 310;
+    float postBoxH = altoPostPenaltisPixagram(curY);
 
-    fill(COLOR_CARD);
-    stroke(esDerrota && !decisionPixagramTomada ? color(225, 80, 65) : COLOR_BORDER);
-    strokeWeight(esDerrota && !decisionPixagramTomada ? 2 : 1);
-    rect(10, curY, pantallaW - 20, postBoxH, 10);
+    if (bloqueVisiblePixagram(curY, postBoxH, vistaArriba, vistaAbajo)) {
+      fill(COLOR_CARD);
+      stroke(esDerrota && !decisionPixagramTomada ? color(225, 80, 65) : COLOR_BORDER);
+      strokeWeight(esDerrota && !decisionPixagramTomada ? 2 : 1);
+      rect(10, curY, pantallaW - 20, postBoxH, 10);
 
-    // Cabecera del autor
-    if (postAvatarImg[0] != null && postAvatarImg[0].width > 0) {
-      image(postAvatarImg[0], 18, curY + 8, 30, 30);
-    } else {
-      fill(#DDD8CD);
-      ellipse(33, curY + 23, 30, 30);
-    }
+      // Cabecera del autor
+      if (postAvatarImg[0] != null && postAvatarImg[0].width > 0) {
+        image(postAvatarImg[0], 18, curY + 8, 30, 30);
+      } else {
+        fill(#DDD8CD);
+        ellipse(33, curY + 23, 30, 30);
+      }
 
-    textFont(fontBold);
-    textSize(11.5f);
-    fill(COLOR_TEXT_DARK);
-    textAlign(LEFT, TOP);
-    text(postAuthorName[0], 54, curY + 8);
-    textFont(fontBody);
-    textSize(9.5f);
-    fill(COLOR_TEXT_MUTED);
-    text(postAuthorHandle[0] + " • " + postTimeAgo[0], 54, curY + 23);
-
-    // Imagen del post de penaltis
-    float imgY = curY + 44;
-    float imgW = pantallaW - 36;
-    float imgH = 135;
-    if (postImg[0] != null && postImg[0].width > 0) {
-      image(postImg[0], 18, imgY, imgW, imgH);
-    } else {
-      fill(esDerrota ? color(95, 45, 45) : color(45, 95, 65));
-      rect(18, imgY, imgW, imgH, 6);
-      fill(255);
-      textAlign(CENTER, CENTER);
-      textSize(10.5f);
-      text(esDerrota ? "[Foto de caída en la cancha]" : "[Sam y sus amigos celebrando]", 18 + imgW / 2, imgY + imgH / 2);
-    }
-
-    recDibujarMarco(18, imgY, imgW, imgH);
-    // Botón de Like y contador con corazón vectorial
-    float likeY = imgY + imgH + 8;
-    int colCorazonPost = postIsLiked[0] ? COLOR_ACCENT : COLOR_TEXT_DARK;
-    dibujarIconoCorazon(26, likeY + 7, 5.5f, colCorazonPost);
-    textFont(fontBold);
-    textSize(11.0f);
-    fill(colCorazonPost);
-    textAlign(LEFT, TOP);
-    text(postLikes[0] + (postIsLiked[0] ? " Te gusta" : " Me gusta"), 38, likeY + 1);
-
-    // Descripción
-    textFont(fontBody);
-    textSize(10.5f);
-    fill(COLOR_TEXT_DARK);
-    text(postCaption[0], 18, likeY + 20, pantallaW - 36, 42);
-
-    // Comentarios
-    float comY = likeY + 66;
-    for (int c = 0; c < postCommentCount[0]; c++) {
       textFont(fontBold);
-      textSize(9.5f);
-      fill(COLOR_PRIMARY_DARK);
-      text(postCommentAuthor[0][c] + ": ", 18, comY);
-      float aw = textWidth(postCommentAuthor[0][c] + ": ");
-      textFont(fontBody);
+      textSize(16);
       fill(COLOR_TEXT_DARK);
-      text(postCommentText[0][c], 18 + aw, comY, pantallaW - 36 - aw, 22);
-      comY += 18;
-    }
+      textAlign(LEFT, TOP);
+      text(postAuthorName[0], 54, curY + 8);
+      textFont(fontBody);
+      textSize(12);
+      fill(COLOR_TEXT_MUTED);
+      text(postAuthorHandle[0] + " • " + postTimeAgo[0], 54, curY + 29);
 
-    // Panel de Decisión Interactiva Obligatoria Post-Penaltis
-    if (!decisionPixagramTomada) {
-      float decY = curY + 278;
-      fill(esDerrota ? color(255, 238, 234) : color(236, 246, 238));
-      stroke(esDerrota ? color(220, 90, 75) : color(75, 165, 95));
-      strokeWeight(1.2f);
-      rect(16, decY, pantallaW - 32, 130, 8);
-
-      textFont(fontBold);
-      textSize(10.0f);
-      fill(esDerrota ? color(175, 35, 30) : color(35, 115, 55));
-      textAlign(CENTER, TOP);
-      if (esDerrota) {
-        text("¿Qué haces con esta publicación?", pantallaW / 2, decY + 6);
+      // Imagen del post de penaltis
+      float imgY = curY + PIXA_PEN_IMAGEN_Y;
+      float imgW = pantallaW - 36;
+      float imgH = PIXA_PEN_IMAGEN_H;
+      if (postImg[0] != null && postImg[0].width > 0) {
+        image(postImg[0], 18, imgY, imgW, imgH);
       } else {
-        text("¿Qué les respondes?", pantallaW / 2, decY + 6);
-      }
-
-      String[] txtBtn = new String[3];
-      int[] reqPts = { 40, 15, 0 };
-      if (esDerrota) {
-        txtBtn[0] = "1. Pedir en los comentarios que borren la foto";
-        txtBtn[1] = "2. Escribirles por privado para que la quiten";
-        txtBtn[2] = "3. No decir nada y dejar pasar el post";
-      } else {
-        txtBtn[0] = "1. Agradecerles por el partido";
-        txtBtn[1] = "2. Escribirles por privado";
-        txtBtn[2] = "3. Presumir que soy el mejor";
-      }
-
-      for (int b = 0; b < 3; b++) {
-        float by = decY + 26 + b * 32;
-        boolean ok = (puntosJugador >= reqPts[b]);
-        fill(ok ? COLOR_PRIMARY : color(185, 182, 190));
-        noStroke();
-        rect(20, by, pantallaW - 40, 27, 5);
-
-        fill(ok ? 255 : color(75, 72, 82));
-        textFont(fontBold);
-        textSize(8.8f);
+        fill(esDerrota ? color(95, 45, 45) : color(45, 95, 65));
+        rect(18, imgY, imgW, imgH, 6);
+        fill(255);
         textAlign(CENTER, CENTER);
-        if (ok) {
-          text(txtBtn[b], pantallaW / 2, by + 13.5f);
-        } else {
-          int faltan = reqPts[b] - puntosJugador;
-          dibujarIconoCandado(30, by + 13.5f, 8.0f, color(90, 40, 40));
-          text("Opción " + (b + 1) + " Requiere " + reqPts[b] + " pts (Faltan " + faltan + " pts)", pantallaW / 2 + 5, by + 13.5f);
-        }
+        textSize(10.5f);
+        text(esDerrota ? "[Foto de caída en la cancha]" : "[Sam y sus amigos celebrando]", 18 + imgW / 2, imgY + imgH / 2);
       }
-    } else {
-      fill(45, 145, 75);
+
+      recDibujarMarco(18, imgY, imgW, imgH);
+      // Botón de Like y contador con corazón vectorial
+      float likeY = curY + PIXA_PEN_LIKE_Y;
+      int colCorazonPost = postIsLiked[0] ? COLOR_ACCENT : COLOR_TEXT_DARK;
+      dibujarIconoCorazon(26, likeY + 7, 5.5f, colCorazonPost);
       textFont(fontBold);
-      textSize(10.5f);
-      textAlign(CENTER, TOP);
-      text("Decisión registrada. Presiona 'Avanzar' o 'C'.", pantallaW / 2, curY + 280);
+      textSize(15);
+      fill(colCorazonPost);
+      textAlign(LEFT, TOP);
+      text(postLikes[0] + (postIsLiked[0] ? " Te gusta" : " Me gusta"), 38, likeY + 1);
+
+      textFont(fontBody);
+      textSize(PIXA_FEED_CUERPO);
+      fill(COLOR_TEXT_DARK);
+      dibujarLineasPixagram(pixaLineasPie, 18, curY + PIXA_PEN_TEXTO_Y);
+
+      float comY = posicionComentariosPixagram(curY);
+      for (int c = 0; c < postCommentCount[0]; c++) {
+        textFont(fontBold);
+        textSize(14);
+        fill(COLOR_PRIMARY_DARK);
+        text(postCommentAuthor[0][c] + ":", 18, comY);
+        textFont(fontBody);
+        textSize(PIXA_FEED_CUERPO);
+        fill(COLOR_TEXT_DARK);
+        dibujarLineasPixagram(pixaLineasComentarios[c], 18, comY + 20);
+        comY += 20 + pixaLineasComentarios[c].size() * PIXA_FEED_INTERLINEA + 6;
+      }
+
+      // Panel de Decisión Interactiva Obligatoria Post-Penaltis
+      if (!decisionPixagramTomada) {
+        float decY = posicionDecisionPixagram(curY);
+        fill(esDerrota ? color(255, 238, 234) : color(236, 246, 238));
+        stroke(esDerrota ? color(220, 90, 75) : color(75, 165, 95));
+        strokeWeight(1.2f);
+        rect(16, decY, pantallaW - 32, PIXA_DECISION_PANEL_H, 8);
+
+        textFont(fontBold);
+        textSize(14);
+        fill(esDerrota ? color(175, 35, 30) : color(35, 115, 55));
+        textAlign(CENTER, TOP);
+        if (esDerrota) {
+          text("¿Qué haces con esta publicación?", pantallaW / 2, decY + 6);
+        } else {
+          text("¿Qué les respondes?", pantallaW / 2, decY + 6);
+        }
+
+        String[] txtBtn = new String[3];
+        int[] reqPts = { 40, 15, 0 };
+        if (esDerrota) {
+          txtBtn[0] = "1. Pedir en los comentarios que borren la foto";
+          txtBtn[1] = "2. Escribirles por privado para que la quiten";
+          txtBtn[2] = "3. No decir nada y dejar pasar el post";
+        } else {
+          txtBtn[0] = "1. Agradecerles por el partido";
+          txtBtn[1] = "2. Escribirles por privado";
+          txtBtn[2] = "3. Presumir que soy el mejor";
+        }
+
+        for (int b = 0; b < 3; b++) {
+          float by = decY + PIXA_DECISION_BOTONES_Y + b * PIXA_DECISION_PASO;
+          boolean ok = (puntosJugador >= reqPts[b]);
+          fill(ok ? COLOR_PRIMARY : color(185, 182, 190));
+          noStroke();
+          rect(20, by, pantallaW - 40, PIXA_DECISION_BOTON_H, 5);
+
+          fill(ok ? 255 : color(75, 72, 82));
+          textFont(fontBold);
+          textSize(13.5f);
+          textLeading(16);
+          textAlign(CENTER, CENTER);
+          if (ok) {
+            text(txtBtn[b], 27, by + 2, pantallaW - 54, PIXA_DECISION_BOTON_H - 4);
+          } else {
+            int faltan = reqPts[b] - puntosJugador;
+            dibujarIconoCandado(30, by + PIXA_DECISION_BOTON_H / 2, 8.0f, color(90, 40, 40));
+            text((b + 1) + ". Requiere " + reqPts[b] + " pts · Faltan " + faltan, 44, by + 2, pantallaW - 68, PIXA_DECISION_BOTON_H - 4);
+          }
+        }
+      } else {
+        fill(45, 145, 75);
+        textFont(fontBold);
+        textSize(14);
+        textLeading(17);
+        textAlign(CENTER, TOP);
+        text("Decisión registrada. Presiona 'Avanzar' o 'C'.", 20, posicionDecisionPixagram(curY), pantallaW - 40, 42);
+      }
     }
 
     curY += postBoxH + 14;
@@ -294,18 +398,23 @@ void dibujarFeedPixagram(float contentH) {
 
   // --- BLOQUE 2: LAS 6 PUBLICACIONES COMUNITARIAS ---
   textFont(fontTitle);
-  textSize(13.0f);
+  textSize(18);
   fill(COLOR_PRIMARY_DARK);
   textAlign(LEFT, TOP);
   text("Comunidad", 12, curY);
   textFont(fontBody);
-  textSize(9.5f);
+  textSize(13);
   fill(COLOR_TEXT_MUTED);
-  text("Interactúa para ganar puntos y bienestar", 12, curY + 17);
-  curY += 34;
+  text("Interactúa para ganar puntos y bienestar", 12, curY + 23);
+  curY += 46;
 
   for (int i = 0; i < totalPixaPosts; i++) {
-    float cardH = 260;
+    float btnY = posicionAccionesComunidadPixagram(curY, i);
+    float cardH = btnY - curY + PIXA_ACCION_H + 12;
+    if (!bloqueVisiblePixagram(curY, cardH, vistaArriba, vistaAbajo)) {
+      curY += cardH + 14;
+      continue;
+    }
     fill(COLOR_CARD);
     stroke(COLOR_BORDER);
     strokeWeight(1);
@@ -321,18 +430,20 @@ void dibujarFeedPixagram(float contentH) {
     }
 
     textFont(fontBold);
-    textSize(11.0f);
+    textSize(15);
     fill(COLOR_TEXT_DARK);
     textAlign(LEFT, TOP);
-    text(pixaNombres[i] + " (" + pixaUsuarios[i] + ")", 52, curY + 8);
+    text(pixaNombres[i], 52, curY + 8);
+    float anchoNombre = textWidth(pixaNombres[i]);
 
     textFont(fontBody);
-    textSize(9.0f);
+    textSize(12);
     fill(COLOR_TEXT_MUTED);
-    text(pixaCategorias[i] + " • " + pixaTiempos[i], 52, curY + 22);
+    text(pixaUsuarios[i], 60 + anchoNombre, curY + 11);
+    text(pixaCategorias[i] + " · " + pixaTiempos[i], 52, curY + 28);
 
     // Imagen o tarjeta visual de la publicación (más grande, 95px)
-    float pImgY = curY + 42;
+    float pImgY = curY + 48;
     float pImgW = pantallaW - 36;
     float pImgH = 95;
     if (pixaFotosPosts[i] != null && pixaFotosPosts[i].width > 0) {
@@ -344,48 +455,38 @@ void dibujarFeedPixagram(float contentH) {
     recDibujarMarco(18, pImgY, pImgW, pImgH);
     // Texto de la publicación (más legible, 10.2f)
     textFont(fontBody);
-    textSize(10.2f);
+    textSize(PIXA_FEED_CUERPO);
     fill(COLOR_TEXT_DARK);
     textAlign(LEFT, TOP);
-    text(pixaDescripciones[i], 18, pImgY + pImgH + 6, pImgW, 44);
+    dibujarLineasPixagram(pixaLineasDescripciones[i], 18, curY + PIXA_COMUNIDAD_TEXTO_Y);
 
     // Botones interactivos
-    float btnY = curY + 194;
-    float btnH = 28;
-    float btnLikeW = 100;
+    float btnH = PIXA_ACCION_H;
+    float btnLikeW = 108;
     float btnAccionX = 18 + btnLikeW + 8;
     float btnAccionW = (pantallaW - 18) - btnAccionX;
-    int impB = pixaImpactoBienestar[i];
-    int impR = pixaImpactoReputacion[i];
 
     // Botón 1: Like con icono vectorial de corazón
     fill(pixaLikeDado[i] ? COLOR_ACCENT : color(234, 230, 222));
     noStroke();
     rect(18, btnY, btnLikeW, btnH, 6);
     int colCorBtn = pixaLikeDado[i] ? color(255) : COLOR_TEXT_DARK;
-    dibujarIconoCorazon(30, btnY + 14, 5.0f, colCorBtn);
+    dibujarIconoCorazon(30, btnY + btnH / 2, 5.0f, colCorBtn);
     fill(colCorBtn);
     textFont(fontBold);
-    textSize(10.0f);
+    textSize(13);
     textAlign(CENTER, CENTER);
-    text((pixaLikeDado[i] ? "Liked (" : "Like (") + pixaLikesCount[i] + ")", 18 + btnLikeW / 2 + 7, btnY + 14);
+    text((pixaLikeDado[i] ? "Liked (" : "Like (") + pixaLikesCount[i] + ")", 18 + btnLikeW / 2 + 7, btnY + btnH / 2);
 
     // Botón 2: Acción Consciente
-    boolean esToxico = (impB < 0);
+    boolean esToxico = pixaImpactoBienestar[i] < 0;
     fill(pixaReflexionDada[i] ? color(60, 155, 85) : (esToxico ? color(215, 95, 55) : COLOR_PRIMARY));
     rect(btnAccionX, btnY, btnAccionW, btnH, 6);
     fill(255);
-    String txtAccion = pixaReflexionDada[i] ? "Verificado [OK]" : (esToxico ? "Cuestionar (+15)" : "Apoyar (+10)");
+    String txtAccion = pixaReflexionDada[i] ? "Verificado [OK]" : (esToxico ? "Cuestionar" : "Apoyar");
     textFont(fontBold);
-    textSize(9.8f);
-    text(txtAccion, btnAccionX + btnAccionW / 2.0f, btnY + 14);
-
-    // Etiqueta de impacto (más clara, 9.2f)
-    textFont(fontBody);
-    textSize(9.2f);
-    fill(impB >= 0 ? color(40, 145, 70) : color(205, 55, 50));
-    textAlign(LEFT, TOP);
-    text("Impacto: " + (impB >= 0 ? "+" : "") + impB + " Bienestar, " + (impR >= 0 ? "+" : "") + impR + " Reputación", 18, btnY + btnH + 6);
+    textSize(13);
+    text(txtAccion, btnAccionX + btnAccionW / 2.0f, btnY + btnH / 2);
 
     curY += cardH + 14;
   }
@@ -453,6 +554,7 @@ void procesarClicFeedPixagram(float relX, float relY, float contentY, float cont
 }
 
 void procesarClicFeedPixagram(float relX, float relY, float contentY) {
+  actualizarTextoPixagram();
   float feedY = relY - contentY - scrollYFeed;
   float curY = 8;
 
@@ -460,8 +562,8 @@ void procesarClicFeedPixagram(float relX, float relY, float contentY) {
 
   // 1. Interacción con el post de penaltis
   if (totalFeedPosts > 0) {
-    float postBoxH = (!decisionPixagramTomada) ? 420 : 310;
-    float likeY = curY + 44 + 135 + 8;
+    float postBoxH = altoPostPenaltisPixagram(curY);
+    float likeY = curY + PIXA_PEN_LIKE_Y;
 
     // Clic en Like del post de penaltis (SOLO 1 VEZ, SIN PUNTOS INFINITOS)
     if (relX >= 14 && relX <= 140 && feedY >= likeY - 4 && feedY <= likeY + 24) {
@@ -479,10 +581,10 @@ void procesarClicFeedPixagram(float relX, float relY, float contentY) {
 
     // Clic en una de las 3 opciones de decisión post-penaltis
     if (!accionFeedRealizada && !decisionPixagramTomada) {
-      float decY = curY + 278;
+      float decY = posicionDecisionPixagram(curY);
       for (int b = 0; b < 3 && !accionFeedRealizada; b++) {
-        float by = decY + 26 + b * 32;
-        if (relX >= 20 && relX <= pantallaW - 20 && feedY >= by && feedY <= by + 28) {
+        float by = decY + PIXA_DECISION_BOTONES_Y + b * PIXA_DECISION_PASO;
+        if (relX >= 20 && relX <= pantallaW - 20 && feedY >= by && feedY <= by + PIXA_DECISION_BOTON_H) {
           ejecutarDecisionPixagramPenaltis(b + 1);
           accionFeedRealizada = true;
         }
@@ -493,14 +595,14 @@ void procesarClicFeedPixagram(float relX, float relY, float contentY) {
   }
 
   // Título de la comunidad
-  curY += 34;
+  curY += 46;
 
   // 2. Interacción con las 6 publicaciones de la comunidad
   for (int i = 0; i < totalPixaPosts && !accionFeedRealizada; i++) {
-    float cardH = 260;
-    float btnY = curY + 194;
-    float btnH = 28;
-    float btnLikeW = 100;
+    float btnY = posicionAccionesComunidadPixagram(curY, i);
+    float cardH = btnY - curY + PIXA_ACCION_H + 12;
+    float btnH = PIXA_ACCION_H;
+    float btnLikeW = 108;
     float btnAccionX = 18 + btnLikeW + 8;
     float btnAccionW = (pantallaW - 18) - btnAccionX;
 
@@ -652,6 +754,7 @@ void intentarSalirDeCelular() {
     } }
   } else {
     // Flujo antes de salir al colegio: simplemente cierra el celular y vuelve a la exploración
+    if (guiaPixagramVisita != GUIA_PIXAGRAM_SIN_VISITA) guiaPixagramVisita = GUIA_PIXAGRAM_COMPLETA;
     estadoDestino = EXPLORACION;
     enTransicion = true;
   }
@@ -662,8 +765,10 @@ void intentarSalirDeCelular() {
 // =========================================================================
 void dibujarTransicionTemporal() {
   background(8, 10, 18);
-  timerTransicionTemporal++;
-  if (timerTransicionTemporal == 1) { reproducirSfx(SFX_TRANSICION_TEMPORAL, 0.7f); }
+  if (!enPausa) {
+    timerTransicionTemporal++;
+  }
+  if (!enPausa && timerTransicionTemporal == 1) { reproducirSfx(SFX_TRANSICION_TEMPORAL, 0.7f); }
 
   float prog = constrain(timerTransicionTemporal / float(DURACION_TRANSICION_TEMPORAL), 0, 1);
   float alfa = 255.0f;
@@ -728,7 +833,7 @@ void dibujarTransicionTemporal() {
   rectMode(CORNER);
   popStyle();
 
-  if (timerTransicionTemporal >= DURACION_TRANSICION_TEMPORAL && !enTransicion) {
+  if (!enPausa && timerTransicionTemporal >= DURACION_TRANSICION_TEMPORAL && !enTransicion) {
     paginaCocina = 0;
     mostrandoDecisionCocina = false;
     ultimoTextoDialogo = "";
@@ -857,7 +962,7 @@ void dibujarNovelaCocina() {
     charsVisibles = 0;
     dialogoCompletado = false;
   }
-  if (!dialogoCompletado) {
+  if (!dialogoCompletado && !enPausa) {
     charsVisibles += velTypewriter;
     if (int(charsVisibles) >= texto.length()) {
       charsVisibles = texto.length();

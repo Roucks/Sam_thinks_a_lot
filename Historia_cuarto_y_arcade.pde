@@ -386,7 +386,7 @@ void t3ActualizarTexto() {
   int ahora = millis();
   float paso = constrain((ahora - t3TickTexto) / 16.67f, 0, 3);
   t3TickTexto = ahora;
-  if (!dialogoCompletado) {
+  if (!dialogoCompletado && !enPausa) {
     charsVisibles = min(texto.length(), charsVisibles + velTypewriter * paso);
     if (int(charsVisibles) >= texto.length()) dialogoCompletado = true;
   }
@@ -408,6 +408,13 @@ boolean dibujarHistoria3() {
       t3DibujarArcade();
     } else {
       t3DibujarCinematica();
+    }
+    if (enPausa && estadoPermitePausaGlobal()) {
+      dibujarMenuPausaGlobal();
+      if (mostrarOpciones) {
+        dibujarPanelOpcionesGlobal();
+      }
+      actualizarYDibujarPopupsYParticulas();
     }
     dibujarAvisoLogro();
     {
@@ -451,7 +458,10 @@ void t3DibujarCinematica() {
 }
 
 void t3DibujarCuarto() {
-  t3Camara = lerp(t3Camara, 1.055f, 0.0025f);
+  background(0);
+  if (!enPausa) {
+    t3Camara = lerp(t3Camara, 1.055f, 0.0025f);
+  }
   if (fondoHabitacion != null && fondoHabitacion.width > 0 && fondoHabitacion.height > 0) {
     float ajuste = max(width / float(fondoHabitacion.width), height / float(fondoHabitacion.height));
     float ancho = fondoHabitacion.width * ajuste * t3Camara;
@@ -472,7 +482,9 @@ void t3DibujarSamCinematica() {
   float objetivo = 0.40f;
   if (t3Etapa == 1) objetivo = 0.61f;
   boolean caminando = abs(t3PosSam - objetivo) > 0.004f;
-  t3PosSam = lerp(t3PosSam, objetivo, 0.035f);
+  if (!enPausa) {
+    t3PosSam = lerp(t3PosSam, objetivo, 0.035f);
+  }
   PImage sam = spriteIdle[1];
   if (caminando) sam = spriteCaminarEste[(frameCount / 6) % 4];
   if (sam != null && sam.width > 0 && sam.height > 0) {
@@ -503,7 +515,7 @@ void t3DibujarSalaPanoramica() {
 }
 
 void t3DibujarAmanecer() {
-  float tiempo = (millis() - t3InicioEscena) / 1000.0f;
+  float tiempo = ((enPausa ? pausaInicioMs : millis()) - t3InicioEscena) / 1000.0f;
   noStroke();
   fill(8, 12, 25, 255 * constrain(tiempo / 0.8f, 0, 1));
   rect(0, 0, width, height);
@@ -513,7 +525,7 @@ void t3DibujarAmanecer() {
   textSize(28 * min(escalaX, escalaY));
   fill(242, 232, 212, alfa);
   text("A la mañana siguiente...", width / 2, height * 0.49f);
-  if (tiempo >= 3) t3EmpezarManana();
+  if (!enPausa && tiempo >= 3) t3EmpezarManana();
 }
 
 void t3DibujarSubtitulos() {
@@ -727,18 +739,6 @@ boolean teclaHistoria3() {
   }
   if (flujoRetornoActivo) {
 
-    if (key == ESC) {
-      key = 0;
-      t3Reiniciar();
-      estadoActual = MENU;
-      estadoDestino = MENU;
-      {
-        flujoRetornoValor = true;
-        flujoRetornoActivo = false;
-      }
-    }
-    if (flujoRetornoActivo) {
-
       if (t3IntroActiva) {
         flujoRetornoValor = true;
         flujoRetornoActivo = false;
@@ -845,8 +845,6 @@ boolean teclaHistoria3() {
         }
 
       }
-
-    }
 
   }
 

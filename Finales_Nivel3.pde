@@ -72,6 +72,7 @@ void iniciarFinalNivel3(boolean ganoArcade) {
   finalNivel3Bueno = bienestarDigital >= UMBRAL_BIENESTAR_FINAL && reputacionDigital >= UMBRAL_REPUTACION_FINAL;
   if (finalNivel3ForzadoDebug == 0) finalNivel3Bueno = false;
   if (finalNivel3ForzadoDebug == 1) finalNivel3Bueno = true;
+  reaccionClipAlResultado(finalNivel3Bueno);
   if (finalNivel3ForzadoDebug < 0 && finalNivel3Bueno && ganoArcade) desbloquearLogro(19);
   if (finalNivel3ForzadoDebug < 0 && !finalNivel3Bueno && !ganoArcade && nv3_fase == 3 && nv3_intentosFase >= 2) desbloquearLogro(20);
   finalNivel3ForzadoDebug = -1;
@@ -92,7 +93,10 @@ void iniciarFinalNivel3(boolean ganoArcade) {
     }
   }
 
-  } else { feriaTerminoArcade = true; }
+  } else {
+    feriaTerminoArcade = true;
+    reaccionClipAlResultado(ganoArcade);
+  }
 }
 
 void abrirFinalNivel3Debug(boolean bueno) {
@@ -144,7 +148,7 @@ void dibujarFinalNivel3() {
     textSize(15 * escalaX);
     text("ENTER / ESPACIO / CLIC para continuar", width * 0.91f, height * 0.91f);
   } else {
-    float transcurrido = (millis() - finalNivel3InicioCreditos) / 1000.0f;
+    float transcurrido = ((enPausa ? pausaInicioMs : millis()) - finalNivel3InicioCreditos) / 1000.0f;
     dibujarFondoCreditosFinal(transcurrido);
     dibujarBorradorCreditos(transcurrido);
     textAlign(CENTER, CENTER);
@@ -166,7 +170,7 @@ void dibujarFinalNivel3() {
         text(linea, width * 0.26f, lineaY);
       }
     }
-    if (transcurrido >= duracionCreditosFinal()) {
+    if (!enPausa && transcurrido >= duracionCreditosFinal()) {
       t3Reiniciar();
       estadoActual = MENU;
       estadoDestino = MENU;

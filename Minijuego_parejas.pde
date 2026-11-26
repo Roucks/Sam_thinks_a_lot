@@ -112,6 +112,7 @@ void parActualizarTiempo() {
   if (parTiempoRestante <= 0) {
     parTiempoRestante = 0;
     parEstadoJuego = 3;
+    reaccionClipAlResultado(false);
   }
 }
 
@@ -125,6 +126,7 @@ void parVerificarVictoriaNivel() {
   }
 
   if (nivelCompletado) {
+    reaccionClipAlResultado(true);
     if (parNivelActual < parMaxNiveles) {
       parNivelActual++;
       parTiempoAcumuladoExtra += 10;
@@ -216,13 +218,6 @@ void dibujarJuegoParejas(float w, float h) {
     textSize((w > 600) ? 19 * escalaX : 13.5f);
     text("JUGAR AHORA", w / 2.0f, h * 0.58f + btnJH / 2.0f);
 
-    fill(51, 65, 85);
-    float btnSW = (w > 600) ? 200 * escalaX : 100;
-    float btnSH = (w > 600) ? 44 * escalaY : 28;
-    rect(w / 2.0f - btnSW / 2.0f, h * 0.70f, btnSW, btnSH, (w > 600 ? 10 * escalaX : 8));
-    fill(203, 213, 225);
-    textSize((w > 600) ? 16 * escalaX : 11);
-    text("< Volver al celular", w / 2.0f, h * 0.70f + btnSH / 2.0f);
   } else {
     if (parEstadoJuego == 1) {
       parActualizarTiempo();
@@ -351,13 +346,6 @@ void dibujarJuegoParejas(float w, float h) {
         textSize((w > 600) ? 18 * escalaX : 12);
         text("JUGAR DE NUEVO", w / 2.0f, h * 0.58f + btnVH / 2.0f);
 
-        fill(51, 65, 85);
-        float btnVSW = (w > 600) ? 200 * escalaX : 100;
-        float btnVSH = (w > 600) ? 44 * escalaY : 28;
-        rect(w / 2.0f - btnVSW / 2.0f, h * 0.69f, btnVSW, btnVSH, (w > 600 ? 10 * escalaX : 8));
-        fill(203, 213, 225);
-        textSize((w > 600) ? 16 * escalaX : 10.5f);
-        text("< Volver al celular", w / 2.0f, h * 0.69f + btnVSH / 2.0f);
       } else {
         if (parEstadoJuego == 3) {
           fill(239, 68, 68);
@@ -377,13 +365,6 @@ void dibujarJuegoParejas(float w, float h) {
           textSize((w > 600) ? 18 * escalaX : 12);
           text("REINTENTAR", w / 2.0f, h * 0.58f + btnDH / 2.0f);
 
-          fill(51, 65, 85);
-          float btnDSW = (w > 600) ? 200 * escalaX : 100;
-          float btnDSH = (w > 600) ? 44 * escalaY : 28;
-          rect(w / 2.0f - btnDSW / 2.0f, h * 0.69f, btnDSW, btnDSH, (w > 600 ? 10 * escalaX : 8));
-          fill(203, 213, 225);
-          textSize((w > 600) ? 16 * escalaX : 10.5f);
-          text("< Volver al celular", w / 2.0f, h * 0.69f + btnDSH / 2.0f);
         }
       }
     }
@@ -410,13 +391,6 @@ void procesarClicParejas(float relX, float relY, float w, float h) {
         parTiempoInicioGlobal = millis();
         parIniciarNivel();
         if (sonidoClic != null) { sonidoClic.amp(0.35f * volMaster); sonidoClic.play(); }
-      } else {
-        float btnSW = (w > 600) ? 200 * escalaX : 100;
-        float btnSH = (w > 600) ? 44 * escalaY : 28;
-        if (relX >= w / 2.0f - btnSW / 2.0f && relX <= w / 2.0f + btnSW / 2.0f && relY >= h * 0.70f && relY <= h * 0.70f + btnSH) {
-          enHome = true;
-          if (sonidoClic != null) { sonidoClic.amp(0.3f * volMaster); sonidoClic.play(); }
-        }
       }
     } else {
       if (parEstadoJuego == 2 || parEstadoJuego == 3) {
@@ -429,13 +403,6 @@ void procesarClicParejas(float relX, float relY, float w, float h) {
           parTiempoInicioGlobal = millis();
           parIniciarNivel();
           if (sonidoClic != null) { sonidoClic.amp(0.35f * volMaster); sonidoClic.play(); }
-        } else {
-          float btnSW = (w > 600) ? 200 * escalaX : 100;
-          float btnSH = (w > 600) ? 44 * escalaY : 28;
-          if (relX >= w / 2.0f - btnSW / 2.0f && relX <= w / 2.0f + btnSW / 2.0f && relY >= h * 0.69f && relY <= h * 0.69f + btnSH) {
-            enHome = true;
-            if (sonidoClic != null) { sonidoClic.amp(0.3f * volMaster); sonidoClic.play(); }
-          }
         }
       } else {
         if (parEstadoJuego == 1 && !parBloqueado) {

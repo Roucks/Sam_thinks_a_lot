@@ -98,6 +98,22 @@ void recCargarPreferencias() {
   recAplicarTema();
 }
 
+void recValidarPreferenciasContraLogros() {
+  boolean cambio = false;
+  if (recTema < 0 || recTema >= REC_TEMAS || !recDisponible(recTemaLogro[recTema])) {
+    recTema = 0;
+    cambio = true;
+  }
+  if (recMarco < 0 || recMarco >= REC_MARCOS || !recDisponible(recMarcoLogro[recMarco])) {
+    recMarco = 0;
+    cambio = true;
+  }
+  recAplicarTema();
+  if (cambio) {
+    recGuardarPreferencias();
+  }
+}
+
 void recDibujarMarco(float x, float y, float w, float h) {
   if (recMarco > 0) {
     pushStyle();

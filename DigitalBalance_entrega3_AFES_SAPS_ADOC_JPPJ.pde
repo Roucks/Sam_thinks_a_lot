@@ -66,10 +66,9 @@ int estadoDestino = MENU;
 // =====================================================
 // CARGA Y TRANSICION
 // =====================================================
-int totalPasosCarga = 13;
-int pasoCarga = 0;
+final int totalPasosCarga = 16;
+int pasoCarga = -2;
 float alphaTransicion = 0;
-float velTransicion = 38;
 boolean enTransicion = false;
 PFont fuenteComic;
 PFont fuenteCelular;
@@ -351,6 +350,11 @@ float[] btnPausaH = new float[4];
 boolean enPausa = false;
 int opcionPausaHover = -1;
 int opcionPausaSeleccionada = 0;
+int pausaInicioMs = 0;
+boolean nv2AudioEstabaSonandoAntesDePausa = false;
+float nv2AudioPosPausaSeg = 0.0f;
+boolean nv3VideoEstabaSonandoAntesDePausa = false;
+boolean skipAutoSaveEnMenu = false;
 
 // =====================================================
 // INTRO (HISTORIA INICIAL: CUMPLEAÑOS DE SAM)
@@ -708,7 +712,6 @@ boolean modoDebug = false;
 
 int pisoActual = 2; // 2 = habitacion, 1 = primer piso
 boolean animandoEscalera = false;
-int tipoEscalera = 0;  // 1 = bajando, 2 = subiendo
 int faseEscalera = 0;  // 1 = entrando a la escalera, 2 = saliendo en el nuevo piso
 
 float limIzq, limDer, limArr, limAba;
@@ -718,6 +721,12 @@ float[] obsY = new float[12];
 float[] obsW = new float[12];
 float[] obsH = new float[12];
 int totalObstaculos = 0;
+
+// Hitbox solida ajustable de la escalera en el segundo piso (fracciones de width y height)
+float escPiso2HitXFrac = 0.710f;
+float escPiso2HitYFrac = 0.222f;
+float escPiso2HitWFrac = 0.164f;
+float escPiso2HitHFrac = 0.295f;
 
 // =====================================================
 // PADRES Y SISTEMA NARRATIVO DINAMICO
@@ -1215,13 +1224,29 @@ final int TOTAL_MENSAJES_POR_CHAT = 4;
 void setup() {
   fullScreen();
   pixelDensity(1);
-  cargarLogrosGlobales();
+  inicializarSistemaGuardadoYCielo();
   recCargarPreferencias();
   frameRate(60);
+  cargarFuenteMenu();
   surface.setTitle("Sam Thinks a Lot");
   textAlign(CENTER, CENTER);
   smooth(2); // suavizado ligero (evita BICUBIC de software en JAVA2D para mantener 60 FPS)
+}
 
+void cargarFuenteMenu() {
+  try {
+    File fFredoka = dataFile("Fredoka-Bold.ttf");
+    if (fFredoka.exists()) {
+      fuenteComic = createFont("Fredoka-Bold.ttf", 44, true);
+    } else {
+      fuenteComic = createFont("Trebuchet MS Bold", 44, true);
+    }
+  } catch (Exception exF) {
+    fuenteComic = createFont("Segoe UI Bold", 44, true);
+  }
+}
+
+void cargarRecursosIniciales() {
   fondosHome[0] = color(40, 55, 80);
   fondosHome[1] = color(75, 45, 85);
   fondosHome[2] = color(35, 75, 55);
@@ -1486,6 +1511,26 @@ void setup() {
 // DRAW
 // =====================================================
 void draw() {
+  escalaX = width / REF_W;
+  escalaY = height / REF_H;
+  if (fotogramaSalida == null && !enTransicion) {
+    feriaActualizarPantalla();
+    if (!hcActiva && hcPuedeContinuar()) hcIniciar();
+  }
+  int escena = escenaVisualActual();
+  prepararTransicionVisual(escena);
+  if (fotogramaSalida == null) {
+    dibujarEscenaJuego();
+    escenaDibujada = escena;
+    if (escena == escenaVisualActual()) {
+      if (mostrarReaccionClip()) dibujarReaccionClip();
+      else dibujarGuiaDeJuego();
+    }
+  }
+  dibujarTransicionGlobal();
+}
+
+void dibujarEscenaJuego() {
   if (!feriaDibujar()) {
 
     boolean flujoRetornoActivo = true;
@@ -1499,9 +1544,6 @@ void draw() {
         flujoRetornoActivo = false;
       }
       if (flujoRetornoActivo) {
-
-        escalaX = width / REF_W;
-        escalaY = height / REF_H;
 
         // nos aseguramos de que la fuente principal este activa para que no se dañen los simbolos xd
         if (fuenteComic != null) {
@@ -1529,46 +1571,31 @@ void draw() {
         actualizarMusicaFondoPorEstado();
 
         // -----------------------------------------------------
-        // CARGA: un recurso por frame
+        // CARGA: un lote de recursos por fotograma.
         // -----------------------------------------------------
         if (estadoActual == CARGA) {
-          background(10, 12, 20);
-
-          float progreso = PApplet.parseFloat(pasoCarga) / totalPasosCarga;
-          if (progreso > 1) {
-            progreso = 1;
+          dibujarPantallaCarga();
+          if (pasoCarga == -2) {
+            // El primer fotograma se presenta antes de leer assets del disco.
+            pasoCarga++;
+            return;
           }
-
-          fill(255);
-          textSize(24 * escalaX);
-          text("CARGANDO... " + PApplet.parseInt(progreso * 100) + "%", width / 2, height * 0.68f);
-
-          float anchoBarra = width * 0.4f;
-          float altoBarra = 14 * escalaY;
-          float barraX = (width - anchoBarra) / 2;
-          float barraY = height * 0.75f;
-
-          stroke(255, 100);
-          strokeWeight(2);
-          noFill();
-          rect(barraX, barraY, anchoBarra, altoBarra, 6);
-          fill(100, 220, 120);
-          noStroke();
-          rect(barraX, barraY, anchoBarra * progreso, altoBarra, 6);
+          if (pasoCarga == -1) {
+            cargarRecursosIniciales();
+            pasoCarga++;
+            return;
+          }
+          if (pasoCarga >= totalPasosCarga) {
+            if (cargaCompletaDesde < 0) cargaCompletaDesde = millis();
+            if (millis() - cargaCompletaDesde >= CARGA_ESPERA_COMPLETA_MS && !enTransicion) {
+              estadoDestino = MENU;
+              enTransicion = true;
+            }
+            return;
+          }
 
           try {
             if (pasoCarga == 0) {
-              // corregimos las fuentes usando una del sistema a buena resolucion que soporte +, tildes y signos sin borrarse xd
-              try {
-                File fFredoka = dataFile("Fredoka-Bold.ttf");
-                if (fFredoka.exists()) {
-                  fuenteComic = createFont("Fredoka-Bold.ttf", 44, true);
-                } else {
-                  fuenteComic = createFont("Trebuchet MS Bold", 44, true);
-                }
-              } catch (Exception exF) {
-                fuenteComic = createFont("Segoe UI Bold", 44, true);
-              }
               try {
                 fuenteCelular = createFont("Segoe UI Semibold", 32, true);
                 fontTitle = createFont("Segoe UI Bold", 32, true);
@@ -1829,6 +1856,8 @@ void draw() {
                                         imgBalon.resize(targetH, targetH);
                                       }
                                     }
+                                  }
+                                  if (pasoCarga == 13) {
                                     File fSamC = dataFile("sam_cancha.jpg");
                                     if (fSamC.exists()) {
                                       imgSamCancha = loadImage("sam_cancha.jpg");
@@ -1890,6 +1919,8 @@ void draw() {
                                         imgEscenaDesayuno.resize(width, height);
                                       }
                                     }
+                                  }
+                                  if (pasoCarga == 14) {
                                     if (dataFile("bg_cocina.png").exists()) {
                                       imgFondoCocina = loadImage("bg_cocina.png");
                                     } else {
@@ -1950,6 +1981,11 @@ void draw() {
                                         }
                                       }
 
+                                    } catch (Exception exArte) {
+                                    }
+                                  }
+                                  if (pasoCarga == 15) {
+                                    try {
                                       // Cargar ilustraciones de dificultad Nivel 2 (IbisPaint)
                                       String[] nomDifArch = {"intermedio", "dificil", "extremo", "injugable"};
                                       for (int d = 0; d < 4; d++) {
@@ -1974,11 +2010,6 @@ void draw() {
                                         }
                                       }
                                     } catch (Exception exArte) {
-                                    }
-                                  } else {
-                                    if (pasoCarga == 13) {
-                                      estadoDestino = MENU;
-                                      enTransicion = true;
                                     }
                                   }
                                 }
@@ -2147,7 +2178,7 @@ void draw() {
               charsVisibles = 0;
               dialogoCompletado = false;
             }
-            if (!dialogoCompletado) {
+            if (!dialogoCompletado && !enPausa) {
               charsVisibles += velTypewriter;
               if (charsVisibles >= textoFullLore.length()) {
                 charsVisibles = textoFullLore.length();
@@ -2320,6 +2351,7 @@ void draw() {
         // EXPLORACION (RPG)
         // -----------------------------------------------------
         if (estadoActual == EXPLORACION) {
+          background(0);
           if (pisoActual == 2 && fondoHabitacion != null) {
             image(fondoHabitacion, 0, 0);
           } else {
@@ -2336,12 +2368,8 @@ void draw() {
             limArr = height * 0.130f;
             limAba = height * 0.955f;
 
-            escX = width * 0.700f;
-            escY = height * 0.220f;
-            escW = width * 0.170f;
-            escH = height * 0.280f;
 
-            totalObstaculos = 6;
+            totalObstaculos = 7;
             obsX[0] = limIzq;
             obsY[0] = 0;
             obsW[0] = limDer - limIzq;
@@ -2366,16 +2394,17 @@ void draw() {
             obsY[5] = height * 0.145f;
             obsW[5] = width * 0.080f;
             obsH[5] = height * 0.170f;
+            // obs[6]: Hitbox solida de la escalera del segundo piso (ajustable arriba con escPiso2Hit*Frac)
+            obsX[6] = width * escPiso2HitXFrac;
+            obsY[6] = height * escPiso2HitYFrac;
+            obsW[6] = width * escPiso2HitWFrac;
+            obsH[6] = height * escPiso2HitHFrac;
           } else {
             limIzq = 0;
             limDer = width;
             limArr = height * 0.060f;
             limAba = height;
 
-            escX = width * 0.780f;
-            escY = height * 0.050f;
-            escW = width * 0.170f;
-            escH = height * 0.250f;
 
             totalObstaculos = 9;
             obsX[0] = 0;
@@ -2416,77 +2445,25 @@ void draw() {
             obsH[8] = height * 0.265f;
           }
 
-          if (modoDebug) {
-            noFill();
-            stroke(255, 255, 0);
-            strokeWeight(3);
-            rect(limIzq, limArr, limDer - limIzq, limAba - limArr);
-
-            fill(255, 0, 0, 100);
-            noStroke();
-            for (int i = 0; i < totalObstaculos; i++) {
-              rect(obsX[i], obsY[i], obsW[i], obsH[i]);
-            }
-
-            fill(0, 0, 255, 100);
-            rect(escX, escY, escW, escH);
-
-            noFill();
-            stroke(0, 255, 0);
-            strokeWeight(2);
-            rect(pjX + hitOffX, pjY + hitOffY, hitW, hitH);
-            stroke(0, 255, 0, 100);
-            strokeWeight(1);
-            rect(pjX, pjY, pjW, pjH);
-
-            fill(0, 255, 0);
-            textAlign(LEFT, TOP);
-            textSize(12);
-            text("HIT: offX=" + hitOffX + " offY=" + hitOffY + " W=" + hitW + " H=" + hitH, 10, 10);
-            text("POS: x=" + PApplet.parseInt(pjX) + " y=" + PApplet.parseInt(pjY), 10, 26);
-          }
-
-          // Padres de Sam
+          // Padres de Sam (dimensiones y hitbox dedicadas)
           padresX = width * 0.50f;
+          calcularZonaEscalera();
+          if (animandoEscalera) actualizarRecorridoEscalera();
+
           padresY = height * 0.20f;
           padresSep = width * 0.065f;
+          float pSpriteW = pjW * 1.05f;
+          float pSpriteH = pjH * 1.05f;
+          float padresHitX = padresX + pSpriteW * 0.14f;
+          float padresHitY = padresY + pSpriteH * 0.08f;
+          float padresHitW = padresSep + pSpriteW * 0.68f;
+          float padresHitH = pSpriteH * 0.88f;
 
           if (pisoActual == 1) {
-            float pSpriteW = pjW * 1.05f;
-            float pSpriteH = pjH * 1.05f;
-            if (imgMama != null && imgMama.width > 0) {
-              image(imgMama, padresX, padresY, pSpriteW, pSpriteH);
-            } else {
-              noStroke();
-              fill(255, 190, 210);
-              rect(padresX, padresY, pjW, pjH);
-            }
-            if (imgPapa != null && imgPapa.width > 0) {
-              image(imgPapa, padresX + padresSep, padresY, pSpriteW, pSpriteH);
-            } else {
-              noStroke();
-              fill(190, 210, 255);
-              rect(padresX + padresSep, padresY, pjW, pjH);
-            }
-
-            fill(255);
-            textAlign(CENTER, BOTTOM);
-            textSize(14 * escalaX);
-            text("MAMÁ", padresX + (pjW / 2), padresY);
-            text("PAPÁ", padresX + padresSep + (pjW / 2), padresY);
-
-            if (modoDebug) {
-              noFill();
-              stroke(255, 0, 255);
-              strokeWeight(2);
-              rect(padresX + hitOffX, padresY + hitOffY, padresSep + hitW, hitH);
-              noStroke();
-            }
-
-            float zonaPadresX = padresX + hitOffX - 50 * escalaX;
-            float zonaPadresY = padresY + hitOffY - 70 * escalaY;
-            float zonaPadresW = padresSep + hitW + 100 * escalaX;
-            float zonaPadresH = hitH + 140 * escalaY;
+            float zonaPadresX = padresHitX - 50 * escalaX;
+            float zonaPadresY = padresHitY - 45 * escalaY;
+            float zonaPadresW = padresHitW + 100 * escalaX;
+            float zonaPadresH = padresHitH + 95 * escalaY;
             samCercaDePadres = (pjX + hitOffX < zonaPadresX + zonaPadresW && pjX + hitOffX + hitW > zonaPadresX
                 && pjY + hitOffY < zonaPadresY + zonaPadresH && pjY + hitOffY + hitH > zonaPadresY);
             float centroHitX = pjX + hitOffX + hitW * 0.5f;
@@ -2494,64 +2471,31 @@ void draw() {
             float puntoMesaX = constrain(centroHitX, obsX[1], obsX[1] + obsW[1]);
             float puntoMesaY = constrain(centroHitY, obsY[1], obsY[1] + obsH[1]);
             samCercaDeMesa = dist(centroHitX, centroHitY, puntoMesaX, puntoMesaY) < 70 * escalaX;
+
+            boolean samDetrasDePadres = (pjY + pjH) < (padresY + pSpriteH);
+            if (samDetrasDePadres) {
+              dibujarSamExploracion();
+              dibujarPadresExploracion(pSpriteW, pSpriteH);
+            } else {
+              dibujarPadresExploracion(pSpriteW, pSpriteH);
+              dibujarSamExploracion();
+            }
           } else {
             samCercaDePadres = false;
             samCercaDeMesa = false;
+            dibujarSamExploracion();
           }
+
           if (pisoActual == 2) {
             samCercaDeCama = dist(pjX + pjW / 2.0f, pjY + pjH / 2.0f, obsX[1] + obsW[1] / 2.0f, obsY[1] + obsH[1] / 2.0f) < 150 * escalaX;
           } else {
             samCercaDeCama = false;
           }
 
-          // Sprite de Sam
-          PImage spriteActual = null;
-          if (samCaminando) {
-            if (direccionSam.equals("norte")) {
-              spriteActual = spriteCaminarNorte[frameAnimActual];
-            } else {
-              if (direccionSam.equals("sur")) {
-                spriteActual = spriteCaminarSur[frameAnimActual];
-              } else {
-                if (direccionSam.equals("este")) {
-                  spriteActual = spriteCaminarEste[frameAnimActual];
-                } else {
-                  if (direccionSam.equals("oeste")) {
-                    spriteActual = spriteCaminarOeste[frameAnimActual];
-                  }
-                }
-              }
-            }
-          } else {
-            if (direccionSam.equals("norte")) {
-              spriteActual = spriteIdle[0];
-            } else {
-              if (direccionSam.equals("sur")) {
-                spriteActual = spriteIdle[1];
-              } else {
-                if (direccionSam.equals("este")) {
-                  spriteActual = spriteIdle[2];
-                } else {
-                  if (direccionSam.equals("oeste")) {
-                    spriteActual = spriteIdle[3];
-                  }
-                }
-              }
-            }
-          }
-
-          if (spriteActual != null) {
-            image(spriteActual, pjX, pjY);
-          } else {
-            fill(100, 255, 100);
-            noStroke();
-            rect(pjX, pjY, pjW, pjH);
-          }
-
           if (!animandoEscalera && !enTransicion && !leyendoMensaje && !enPausa && !mostrandoModalDormir) {
             if (pisoActual == 2) {
               if (!desayunoComido) {
-                dibujarIndicativoFlotante(indicativoDireccion, escX - 12 * escalaX, escY + escH * 0.55f, 95 * escalaX, 0);
+                dibujarIndicativoFlotante(indicativoDireccion, obsX[6] - 12 * escalaX, obsY[6] + obsH[6] * 0.50f, 95 * escalaX, 0);
               }
               if (tieneCelular && desayunoComido) {
                 dibujarIndicativoFlotante(indicativoDireccion, obsX[1] - 20 * escalaX, obsY[1] + obsH[1] * 0.5f, 95 * escalaX, 0);
@@ -2559,7 +2503,7 @@ void draw() {
             }
             if (pisoActual == 1) {
               if (!tieneCelular) {
-                dibujarIndicativoFlotante(indicativoPendiente, padresX + padresSep * 0.5f + pjW * 0.5f, padresY - 35 * escalaY, 90 * escalaX, 1.5f);
+                dibujarIndicativoFlotante(indicativoPendiente, padresX + padresSep * 0.5f + pSpriteW * 0.5f, padresY - 35 * escalaY, 90 * escalaX, 1.5f);
               }
               if (tieneCelular && !desayunoComido && !dia1Terminado) {
                 dibujarIndicativoFlotante(indicativoPendiente, obsX[1] + obsW[1] * 0.5f, obsY[1] - 35 * escalaY, 90 * escalaX, 1.5f);
@@ -2570,36 +2514,29 @@ void draw() {
             }
           }
 
-          boolean samSobreEscalera = (pjX + hitOffX < escX + escW && pjX + hitOffX + hitW > escX && pjY + hitOffY < escY + escH
-              && pjY + hitOffY + hitH > escY);
+          boolean samSobreEscalera = samCercaDeAccesoEscalera();
 
-          if (!animandoEscalera && samSobreEscalera) {
-            fill(255);
-            textAlign(CENTER, CENTER);
-            textSize(20 * escalaX);
+          if (!animandoEscalera && !enPausa && samSobreEscalera) {
             if (pisoActual == 2) {
-              text("Presiona 'E' para bajar", pjX + (pjW / 2), pjY - 20);
+              dibujarAvisoInteraccionExploracion("Presiona 'E' para bajar");
             } else {
-              text("Presiona 'E' para subir", pjX + (pjW / 2), pjY - 20);
+              dibujarAvisoInteraccionExploracion("Presiona 'E' para subir");
             }
           }
 
-          if (!animandoEscalera && !leyendoMensaje && !enTransicion && !mostrandoModalDormir) {
-            fill(255);
-            textAlign(CENTER, CENTER);
-            textSize(20 * escalaX);
+          if (!animandoEscalera && !leyendoMensaje && !enTransicion && !enPausa && !mostrandoModalDormir) {
             if (pisoActual == 1) {
               if (!tieneCelular && samCercaDePadres) {
-                text("Presiona 'E' para hablar con tus padres", pjX + (pjW / 2), pjY - 20);
+                dibujarAvisoInteraccionExploracion("Presiona 'E' para hablar con tus padres");
               } else {
                 if (tieneCelular && !desayunoComido && samCercaDeMesa) {
-                  text("Presiona 'E' para desayunar en la mesa", pjX + (pjW / 2), pjY - 20);
+                  dibujarAvisoInteraccionExploracion("Presiona 'E' para desayunar en la mesa");
                 } else {
                   if (dia1Terminado && samCercaDePadres) {
-                    text("Presiona 'E' para hablar con tus padres", pjX + (pjW / 2), pjY - 20);
+                    dibujarAvisoInteraccionExploracion("Presiona 'E' para hablar con tus padres");
                   } else {
                     if (samCercaDePadres) {
-                      text("Presiona 'E' para hablar", pjX + (pjW / 2), pjY - 20);
+                      dibujarAvisoInteraccionExploracion("Presiona 'E' para hablar");
                     }
                   }
                 }
@@ -2608,9 +2545,9 @@ void draw() {
               if (pisoActual == 2) {
                 if (samCercaDeCama) {
                   if (tieneCelular && desayunoComido) {
-                    text("Presiona 'E' para acostarte en la cama", pjX + (pjW / 2), pjY - 20);
+                    dibujarAvisoInteraccionExploracion("Presiona 'E' para acostarte en la cama");
                   } else {
-                    text("Ya me desperté, debería bajar a la sala", pjX + (pjW / 2), pjY - 20);
+                    dibujarAvisoInteraccionExploracion("Ya me desperté, debería bajar a la sala");
                   }
                 }
               }
@@ -2636,46 +2573,10 @@ void draw() {
             }
           }
 
-          if (animandoEscalera) {
-            samCaminando = true;
-            if (faseEscalera == 1) {
-              if (tipoEscalera == 1) {
-                pjX += pjVel * 0.5f;
-                direccionSam = "este";
-              } else {
-                pjY -= pjVel * 0.6f;
-                pjX += pjVel * 0.18f;
-                direccionSam = "norte";
-              }
-            } else {
-              if (faseEscalera == 2) {
-                if (tipoEscalera == 1) {
-                  pjY += pjVel * 0.6f;
-                  pjX -= pjVel * 0.18f;
-                  direccionSam = "sur";
-                  if (pjY >= height * 0.28f) {
-                    pjY = height * 0.28f;
-                    animandoEscalera = false;
-                    faseEscalera = 0;
-                    samCaminando = false;
-                  }
-                } else {
-                  pjX -= pjVel * 0.5f;
-                  direccionSam = "oeste";
-                  if (pjX <= width * 0.63f) {
-                    pjX = width * 0.63f;
-                    animandoEscalera = false;
-                    faseEscalera = 0;
-                    samCaminando = false;
-                    direccionSam = "sur";
-                  }
-                }
-              }
-            }
-          } else {
+          if (!animandoEscalera) {
             samCaminando = false;
 
-            if (!leyendoMensaje && !enTransicion && alphaTransicion <= 0 && !enPausa) {
+            if (!leyendoMensaje && !enTransicion && alphaTransicion <= 0 && !enPausa && !guiaPresentacionPendiente) {
               float desplazX = 0;
               float desplazY = 0;
 
@@ -2731,8 +2632,8 @@ void draw() {
                     }
                   }
                   if (pisoActual == 1) {
-                    if (futHitX < padresX + hitOffX + padresSep + hitW && futHitX + hitW > padresX + hitOffX && futHitY < padresY + hitOffY + hitH
-                        && futHitY + hitH > padresY + hitOffY) {
+                    if (futHitX < padresHitX + padresHitW && futHitX + hitW > padresHitX && futHitY < padresHitY + padresHitH
+                        && futHitY + hitH > padresHitY) {
                       hayColision = true;
                     }
                   }
@@ -2747,20 +2648,78 @@ void draw() {
             }
           }
 
-          contadorFrameAnim++;
-          if (samCaminando) {
-            if (contadorFrameAnim >= velocidadAnim) {
-              contadorFrameAnim = 0;
-              frameAnimActual = (frameAnimActual + 1) % totalFramesAnim;
-              if (frameAnimActual % 2 == 0) {
-                reproducirSfx(SFX_PASOS, 0.35f);
+          if (!enPausa) {
+            contadorFrameAnim++;
+            if (samCaminando) {
+              if (contadorFrameAnim >= velocidadAnim) {
+                contadorFrameAnim = 0;
+                frameAnimActual = (frameAnimActual + 1) % totalFramesAnim;
+                if (frameAnimActual % 2 == 0) {
+                  reproducirSfx(SFX_PASOS, 0.35f);
+                }
+              }
+            } else {
+              if (contadorFrameAnim >= velocidadAnim * 3) {
+                contadorFrameAnim = 0;
+                frameAnimActual = (frameAnimActual + 1) % totalFramesIdle;
               }
             }
-          } else {
-            if (contadorFrameAnim >= velocidadAnim * 3) {
-              contadorFrameAnim = 0;
-              frameAnimActual = (frameAnimActual + 1) % totalFramesIdle;
+          }
+
+          if (modoDebug) {
+            pushStyle();
+            rectMode(CORNER);
+            noFill();
+            stroke(255, 255, 0);
+            strokeWeight(3);
+            rect(limIzq, limArr, limDer - limIzq, limAba - limArr);
+
+            fill(255, 0, 0, 100);
+            noStroke();
+            for (int i = 0; i < totalObstaculos; i++) {
+              rect(obsX[i], obsY[i], obsW[i], obsH[i]);
             }
+
+            if (pisoActual == 2) {
+              noFill();
+              stroke(255, 255, 0);
+              strokeWeight(2);
+              rect(obsX[6], obsY[6], obsW[6], obsH[6]);
+              noStroke();
+              fill(255, 255, 0);
+              textAlign(CENTER, CENTER);
+              textSize(12);
+              text("ESCALERA (obs[6])", obsX[6] + obsW[6] * 0.5f, obsY[6] + obsH[6] * 0.5f);
+            }
+
+            if (pisoActual == 1) {
+              fill(255, 0, 180, 75);
+              stroke(255, 0, 255);
+              strokeWeight(2);
+              rect(padresHitX, padresHitY, padresHitW, padresHitH);
+              noStroke();
+            }
+
+            fill(0, 0, 255, 100);
+            rect(escX, escY, escW, escH);
+
+            noFill();
+            stroke(0, 255, 0);
+            strokeWeight(2);
+            rect(pjX + hitOffX, pjY + hitOffY, hitW, hitH);
+            stroke(0, 255, 0, 100);
+            strokeWeight(1);
+            rect(pjX, pjY, pjW, pjH);
+
+            fill(0, 255, 0);
+            textAlign(LEFT, TOP);
+            textSize(12);
+            text("HIT: offX=" + hitOffX + " offY=" + hitOffY + " W=" + hitW + " H=" + hitH, 10, 10);
+            text("POS: x=" + PApplet.parseInt(pjX) + " y=" + PApplet.parseInt(pjY), 10, 26);
+            if (pisoActual == 2) {
+              text("ESC P2: X=" + nf(escPiso2HitXFrac, 1, 3) + " Y=" + nf(escPiso2HitYFrac, 1, 3) + " W=" + nf(escPiso2HitWFrac, 1, 3) + " H=" + nf(escPiso2HitHFrac, 1, 3), 10, 42);
+            }
+            popStyle();
           }
 
           // HUD Integrado de Bienestar Digital, Reputación Digital y Puntos (Requisito 2 y 3)
@@ -2782,90 +2741,6 @@ void draw() {
           if (mostrandoModalDormir) {
             dibujarModalDormir();
           }
-        }
-
-        // -----------------------------------------------------
-        // MENU DE PAUSA
-        // -----------------------------------------------------
-        if ((estadoActual == JUEGO || estadoActual == EXPLORACION) && enPausa) {
-          fill(0, 150);
-          noStroke();
-          rect(0, 0, width, height);
-
-          fill(255);
-          textAlign(CENTER, CENTER);
-          textSize(40 * escalaX);
-          text("PAUSA", width / 2, height * 0.3f);
-
-          float pausaBtnAncho = (REF_W * 0.18f) * escalaX;
-          float pausaBtnAlto = (REF_H * 0.08f) * escalaY;
-          float pausaEspacio = (REF_W * 0.03f) * escalaX;
-          float pausaAnchoTotal = (pausaBtnAncho * totalBotonesPausa) + (pausaEspacio * (totalBotonesPausa - 1));
-          float pausaInicioX = (width - pausaAnchoTotal) / 2;
-          float pausaY = height * 0.5f;
-
-          for (int k = 0; k < totalBotonesPausa; k++) {
-            btnPausaW[k] = pausaBtnAncho;
-            btnPausaH[k] = pausaBtnAlto;
-            btnPausaX[k] = pausaInicioX + (k * (pausaBtnAncho + pausaEspacio));
-            btnPausaY[k] = pausaY;
-          }
-
-          if (!mostrarOpciones) {
-            int hoverActual = -1;
-            for (int k = 0; k < totalBotonesPausa; k++) {
-              if (mouseX > btnPausaX[k] && mouseX < btnPausaX[k] + btnPausaW[k] && mouseY > btnPausaY[k] && mouseY < btnPausaY[k] + btnPausaH[k]) {
-                hoverActual = k;
-              }
-            }
-            if (hoverActual != opcionPausaHover && hoverActual != -1) {
-              opcionPausaSeleccionada = hoverActual;
-              if (sonidoHover != null) {
-                sonidoHover.amp(0.15f * volMaster);
-                sonidoHover.play();
-              }
-            }
-            opcionPausaHover = hoverActual;
-          }
-
-          for (int k = 0; k < totalBotonesPausa; k++) {
-            boolean seleccionado = (opcionPausaSeleccionada == k);
-
-            if (seleccionado) {
-              fill(255, 220, 100);
-            } else {
-              fill(180, 120, 60);
-            }
-            stroke(100, 50, 20);
-            strokeWeight(4);
-            rect(btnPausaX[k], btnPausaY[k], btnPausaW[k], btnPausaH[k], 8);
-
-            noStroke();
-            if (seleccionado) {
-              fill(255, 240, 150, 100);
-            } else {
-              fill(200, 150, 90, 100);
-            }
-            rect(btnPausaX[k] + 4, btnPausaY[k] + 4, btnPausaW[k] - 8, btnPausaH[k] / 2 - 4, 4);
-
-            textSize(24 * escalaX);
-            if (!seleccionado) {
-              fill(100, 50, 20);
-              text(botonesPausa[k], btnPausaX[k] + (btnPausaW[k] / 2) + 2, btnPausaY[k] + (btnPausaH[k] / 2) + 2);
-              fill(255);
-            } else {
-              fill(50, 20, 0);
-            }
-            text(botonesPausa[k], btnPausaX[k] + (btnPausaW[k] / 2), btnPausaY[k] + (btnPausaH[k] / 2));
-          }
-
-          if (!mostrarOpciones) {
-            dibujarIndicativoFlotante(indicativoGuardar, btnPausaX[1] + btnPausaW[1] * 0.5f, btnPausaY[1] - 34 * escalaY, 90 * escalaX, 2.5f);
-          }
-
-          fill(180);
-          textSize(16 * escalaX);
-          text("LEFT/RIGHT para navegar | ENTER para confirmar | P para reanudar", width / 2, pausaY + pausaBtnAlto + (20 * escalaY));
         }
 
         // -----------------------------------------------------
@@ -3008,7 +2883,7 @@ void draw() {
             charsVisibles = 0;
             dialogoCompletado = false;
           }
-          if (!dialogoCompletado) {
+          if (!dialogoCompletado && !enPausa) {
             charsVisibles += velTypewriter;
             if (charsVisibles >= textoActual.length()) {
               charsVisibles = textoActual.length();
@@ -3037,6 +2912,7 @@ void draw() {
         // NIVEL 1: CELULAR DE SAM
         // -----------------------------------------------------
         if (estadoActual == NIVEL1) {
+          background(0);
           if (pisoActual == 2 && fondoHabitacion != null && fondoHabitacion.width > 0) {
             image(fondoHabitacion, 0, 0);
           } else {
@@ -3065,7 +2941,7 @@ void draw() {
           pantallaY = telefonoY + (telefonoAlto * (294.0f / 1600.0f));
 
           // AVANCE DEL TIEMPO IN-GAME: Cada 4 segundos reales suma 1 minuto in-game
-          acumuladorMinutos += (1.0f / 60.0f);
+          if (!enPausa) acumuladorMinutos += (1.0f / 60.0f);
           if (acumuladorMinutos >= 4.0f) {
             acumuladorMinutos = 0;
             minutoReloj++;
@@ -3098,14 +2974,7 @@ void draw() {
             notifPushFin = millis() + 6000;
             notifPushY = -80;
             // Logro si se quedó pegado
-            if (!logrosDesbloqueados[2]) {
-              logrosDesbloqueados[2] = true;
-              guardarLogrosGlobales();
-              puntosJugador += 10;
-              logroNotifTexto = logros[2][1] + " (+10 pts)";
-              logroNotifFinTiempo = millis() + 3500;
-              reproducirSfx(SFX_LOGRO, 0.55f);
-            }
+            desbloquearLogro(2);
           }
 
           // =====================================================
@@ -3248,10 +3117,8 @@ void draw() {
 
               int appsVisibles = juegosDesbloqueados ? totalApps : 7;
               for (int i = 0; i < appsVisibles; i++) {
-                int columna = i % columnasApps;
-                int fila = i / columnasApps;
-                float appX = espacioAppsX + columna * (tamApp + espacioAppsX);
-                float appY = inicioAppsY + fila * (tamApp + espacioAppsY + 12);
+                float appX = appCelularX(i);
+                float appY = appCelularY(i);
                 float centroX = appX + tamApp / 2;
                 float centroY = appY + tamApp / 2;
 
@@ -3830,13 +3697,13 @@ void draw() {
 
                             fill(COLOR_PRIMARY);
                             textFont(fontBold);
-                            textSize(10.5f);
+                            textSize(13);
                             textAlign(LEFT, CENTER);
                             text("< Celular", 10, 41);
 
                             fill(COLOR_PRIMARY_DARK);
                             textFont(fontTitle);
-                            textSize(13);
+                            textSize(17);
                             textAlign(CENTER, CENTER);
                             text("Pixagram", pantallaW / 2, 41);
 
@@ -4036,13 +3903,13 @@ void draw() {
 
                             fill(COLOR_PRIMARY);
                             textFont(fontBold);
-                            textSize(11.5f);
+                            textSize(13);
                             textAlign(LEFT, CENTER);
                             text("< Celular", 10, 41);
 
                             fill(COLOR_PRIMARY_DARK);
                             textFont(fontTitle);
-                            textSize(14);
+                            textSize(17);
                             textAlign(CENTER, CENTER);
                             text("Pixagram", pantallaW / 2, 41);
 
@@ -4084,7 +3951,7 @@ void draw() {
 
                               textAlign(CENTER, CENTER);
                               textFont(isSelected ? fontBold : fontBody);
-                              textSize(9.5f);
+                              textSize(13);
                               fill(isSelected ? COLOR_PRIMARY_DARK : COLOR_TEXT_MUTED);
                               text(tabNames[tb], bX + btnW / 2, pantallaH - 48 + 33);
 
@@ -4220,10 +4087,10 @@ void draw() {
             text("CELULAR DE SAM", width / 2, height * 0.035f);
 
             // Botón interactivo inferior del celular
-            float btnGuardarW = 440 * escalaX;
-            float btnGuardarH = 38 * escalaY;
+            float btnGuardarW = BOTON_GUARDAR_CELULAR_W * escalaX;
+            float btnGuardarH = BOTON_GUARDAR_CELULAR_H * escalaY;
             float btnGuardarX = (width - btnGuardarW) / 2;
-            float btnGuardarY = height - btnGuardarH - 10;
+            float btnGuardarY = height - btnGuardarH - BOTON_GUARDAR_CELULAR_MARGEN;
 
             boolean hoverBtnInf = (mouseX >= btnGuardarX && mouseX <= btnGuardarX + btnGuardarW && mouseY >= btnGuardarY
                 && mouseY <= btnGuardarY + btnGuardarH);
@@ -4397,7 +4264,7 @@ void draw() {
             charsVisibles = 0;
             dialogoCompletado = false;
           }
-          if (!dialogoCompletado) {
+          if (!dialogoCompletado && !enPausa) {
             charsVisibles += velTypewriter;
             if (charsVisibles >= textoFullEscuela.length()) {
               charsVisibles = textoFullEscuela.length();
@@ -4921,262 +4788,17 @@ void draw() {
             line(apTargetX - 32 * escalaX, apTargetY, apTargetX + 32 * escalaX, apTargetY);
             line(apTargetX, apTargetY - 32 * escalaY, apTargetX, apTargetY + 32 * escalaY);
 
-            rectMode(CENTER);
-            stroke(40, 25, 10);
-            strokeWeight(4 * escalaY);
-            fill(25, 30, 45, 220);
-            rect(width / 2, height - 52 * escalaY, 680 * escalaX, 66 * escalaY, 16);
-            rectMode(CORNER);
-
-            textAlign(CENTER, CENTER);
-            textSize(25 * escalaY);
-            fill(255, 230, 50);
-            if (penSubEstadoApuntado == 0) {
-              text("1. CLIC O ESPACIO: FIJAR DIRECCIÓN (IZQ / DER)", width / 2, height - 54 * escalaY);
-            } else {
-              if (penSubEstadoApuntado == 1) {
-                text("2. CLIC O ESPACIO: FIJAR ALTURA (ARRIBA / ABAJO)", width / 2, height - 54 * escalaY);
-              } else {
-                if (penSubEstadoApuntado == 2) {
-                  text("3. CLIC O ESPACIO: ¡FIJAR POTENCIA Y PATEAR!", width / 2, height - 54 * escalaY);
-                  float barraW = 36 * escalaX;
-                  float barraH = 220 * escalaY;
-                  float barraX = puntoPenaltiX + 130 * escalaX;
-                  float barraY = puntoPenaltiY - 200 * escalaY;
-                  fill(30, 190);
-                  stroke(255);
-                  strokeWeight(4 * escalaY);
-                  rect(barraX, barraY, barraW, barraH, 10);
-                  int colorPotencia = color(255 * porcentajePotencia, 255 * (1 - porcentajePotencia), 20);
-                  fill(colorPotencia);
-                  noStroke();
-                  float altoLleno = (barraH - 8 * escalaY) * porcentajePotencia;
-                  rect(barraX + 4 * escalaX, barraY + barraH - 4 * escalaY - altoLleno, barraW - 8 * escalaX, altoLleno, 6);
-                }
-              }
-            }
-
-            float duracionProgreso = (float) penTiempoRestanteAccion / penTiempoLimiteFrames;
-            float anchoBarra = 460 * escalaX;
-            float altoBarra = 22 * escalaY;
-            float xBarra = width / 2 - anchoBarra / 2;
-            float yBarra = 48 * escalaY;
-            fill(25, 190);
-            stroke(255);
-            strokeWeight(3 * escalaY);
-            rect(xBarra, yBarra, anchoBarra, altoBarra, 10);
-            int colorTiempo = color(255 * (1 - duracionProgreso), 255 * duracionProgreso, 40);
-            fill(colorTiempo);
-            noStroke();
-            rect(xBarra + 3 * escalaX, yBarra + 3 * escalaY, (anchoBarra - 6 * escalaX) * duracionProgreso, altoBarra - 6 * escalaY, 8);
-
-            int segundosRestantes = ceil(penTiempoRestanteAccion / 60.0f);
-            fill(255);
-            textAlign(CENTER, BOTTOM);
-            textSize(21 * escalaY);
-            text("!! TIEMPO LÍMITE: " + segundosRestantes + "s", width / 2, yBarra - 6 * escalaY);
+            dibujarIndicacionesPenaltis();
           }
 
-          // Marcador HUD Superior
-          if (penEstadoActual != 0) {
-            rectMode(CORNER);
-            stroke(255, 185);
-            strokeWeight(3 * escalaY);
-            fill(18, 25, 42, 225);
-            rect(24 * escalaX, 18 * escalaY, 465 * escalaX, 162 * escalaY, 16);
-
-            float samAvatarX = 88 * escalaX;
-            float samAvatarY = 66 * escalaY;
-            float avatarH = 62.0f * escalaY;
-            float avatarW = (imgSamCancha != null) ? avatarH * ((float) imgSamCancha.width / (float) imgSamCancha.height) : 110.0f * escalaX;
-            if (imgSamCancha != null) {
-              imageMode(CENTER);
-              image(imgSamCancha, samAvatarX, samAvatarY, avatarW, avatarH);
-            }
-            noFill();
-            stroke(85, 220, 255);
-            strokeWeight(3 * escalaY);
-            rectMode(CENTER);
-            rect(samAvatarX, samAvatarY, avatarW + 4 * escalaX, avatarH + 4 * escalaY, 6);
-            rectMode(CORNER);
-
-            fill(85, 220, 255);
-            textAlign(CENTER, TOP);
-            textSize(15 * escalaY);
-            text("PATEA: SAM", samAvatarX, samAvatarY + avatarH / 2 + 5 * escalaY);
-
-            fill(255);
-            textSize(20 * escalaY);
-            textAlign(LEFT, TOP);
-            text("TIRO: " + tiroActual + " / " + TOTAL_TIROS + " (" + penNombresDificultad[penDificultadActual] + ")", 156 * escalaX, 24 * escalaY);
-            fill(90, 255, 110);
-            textSize(19 * escalaY);
-            text("Goles: " + goles + "  |  Pts: " + round(puntosMostradosLerp), 156 * escalaX, 54 * escalaY);
-            dibujarIconoEstrella(262 * escalaX, 64 * escalaY, 7 * escalaX, color(255, 225, 65));
-            fill(255, 110, 110);
-            text("Atajadas: " + atajadas + "  |  Fallos: " + fallos, 156 * escalaX, 84 * escalaY);
-            fill(255, 220, 90);
-            textSize(15 * escalaY);
-            text(turnoMateo ? "Portero en turno: MATEO (Tiros 1, 3, 5)" : "Portero en turno: CRISTIAN (Tiros 2, 4)", 40 * escalaX, 148 * escalaY);
-
-            stroke(255, 185);
-            strokeWeight(3 * escalaY);
-            fill(18, 25, 42, 225);
-            rect(width - 465 * escalaX, 18 * escalaY, 441 * escalaX, 148 * escalaY, 16);
-
-            PImage imgAvatarArq = turnoMateo ? imgMateoCancha : imgCristianCancha;
-            float arqAvatarX = width - 92 * escalaX;
-            float arqAvatarY = 66 * escalaY;
-            float arqAvatarH = 62.0f * escalaY;
-            float arqAvatarW = (imgAvatarArq != null) ? arqAvatarH * ((float) imgAvatarArq.width / (float) imgAvatarArq.height) : 110.0f * escalaX;
-            if (imgAvatarArq != null) {
-              imageMode(CENTER);
-              image(imgAvatarArq, arqAvatarX, arqAvatarY, arqAvatarW, arqAvatarH);
-            }
-            noFill();
-            stroke(turnoMateo ? color(255, 155, 50) : color(180, 130, 255));
-            strokeWeight(3 * escalaY);
-            rectMode(CENTER);
-            rect(arqAvatarX, arqAvatarY, arqAvatarW + 4 * escalaX, arqAvatarH + 4 * escalaY, 6);
-            rectMode(CORNER);
-
-            fill(turnoMateo ? color(255, 175, 70) : color(205, 165, 255));
-            textAlign(CENTER, TOP);
-            textSize(15 * escalaY);
-            text(turnoMateo ? "TAPA: MATEO" : "TAPA: CRISTIAN", arqAvatarX, arqAvatarY + arqAvatarH / 2 + 5 * escalaY);
-
-            textAlign(LEFT, TOP);
-            fill(255);
-            textSize(19 * escalaY);
-            text(turnoMateo ? "ARQUERO: MATEO" : "ARQUERO: CRISTIAN", width - 445 * escalaX, 28 * escalaY);
-            fill(210, 225, 245);
-            textSize(15 * escalaY);
-            if (turnoMateo) {
-              text(" +25% Velocidad vuelo | Alcance: 70", width - 445 * escalaX, 56 * escalaY);
-            } else {
-              text(" +8% Adivinar | Alcance: 90 | Vuelo -15%", width - 445 * escalaX, 56 * escalaY);
-            }
-
-            for (int i = 0; i < TOTAL_TIROS; i++) {
-              float bx = width - 425 * escalaX + (i * 54 * escalaX);
-              float by = 112 * escalaY;
-              stroke(255);
-              strokeWeight(2.5f * escalaY);
-              if (i < tiroActual - 1)
-                fill(70, 235, 90);
-              else {
-                if (i == tiroActual - 1 && penEstadoActual != 4)
-                  fill(255, 230, 40);
-                else
-                  fill(75, 85, 105);
-              }
-              ellipse(bx, by, 32 * escalaY, 32 * escalaY);
-              fill(20);
-              textAlign(CENTER, CENTER);
-              textSize(14 * escalaY);
-              text(((i + 1) % 2 != 0) ? "M" : "C", bx, by - 1 * escalaY);
-            }
-          }
+          if (penEstadoActual != 0) dibujarMarcadorPenaltis(turnoMateo);
 
           // 7. PANTALLAS DE INICIO, RESULTADO Y FIN
           if (penEstadoActual == 0) {
-            fill(0, 185);
-            noStroke();
-            rect(0, 0, width, height);
-
-            rectMode(CENTER);
-            stroke(65, 40, 15);
-            strokeWeight(5 * escalaY);
-            fill(255, 250, 238);
-            rect(width / 2, height / 2, 980 * escalaX, 660 * escalaY, 32);
-
-            textAlign(CENTER, CENTER);
-            textSize(50 * escalaY);
-            fill(45, 20, 10);
-            text("¡DUELO DE PENALTIS!", width / 2 + 3 * escalaX, 182 * escalaY + 3 * escalaY);
-            fill(255, 180, 30);
-            text("¡DUELO DE PENALTIS!", width / 2, 182 * escalaY);
-
-            imageMode(CENTER);
-            float pH = 74.0f * escalaY;
-            if (imgSamCancha != null) {
-              float pW = pH * ((float) imgSamCancha.width / (float) imgSamCancha.height);
-              image(imgSamCancha, width / 2 - 250 * escalaX, 265 * escalaY, pW, pH);
-              noFill();
-              stroke(45, 135, 235);
-              strokeWeight(3 * escalaY);
-              rect(width / 2 - 250 * escalaX, 265 * escalaY, pW + 4 * escalaX, pH + 4 * escalaY, 8);
-            }
-            if (imgMateoCancha != null) {
-              float pW = pH * ((float) imgMateoCancha.width / (float) imgMateoCancha.height);
-              image(imgMateoCancha, width / 2, 265 * escalaY, pW, pH);
-              noFill();
-              stroke(245, 140, 40);
-              strokeWeight(3 * escalaY);
-              rect(width / 2, 265 * escalaY, pW + 4 * escalaX, pH + 4 * escalaY, 8);
-            }
-            if (imgCristianCancha != null) {
-              float pW = pH * ((float) imgCristianCancha.width / (float) imgCristianCancha.height);
-              image(imgCristianCancha, width / 2 + 250 * escalaX, 265 * escalaY, pW, pH);
-              noFill();
-              stroke(90, 60, 160);
-              strokeWeight(3 * escalaY);
-              rect(width / 2 + 250 * escalaX, 265 * escalaY, pW + 4 * escalaX, pH + 4 * escalaY, 8);
-            }
-
-            fill(55, 35, 20);
-            textSize(16 * escalaY);
-            text("SAM", width / 2 - 250 * escalaX, 318 * escalaY);
-            text("MATEO", width / 2, 318 * escalaY);
-            text("CRISTIAN", width / 2 + 250 * escalaX, 318 * escalaY);
-
-            fill(70, 45, 30);
-            textSize(22 * escalaY);
-            text("1. Elige Dirección   -   2. Elige Altura   -   3. Elige Potencia", width / 2, 362 * escalaY);
-
-            String[] etiqDif = {"NORMAL\n(5s - Base 20 pts/gol)", "DIFÍCIL\n(3.5s - Base 35 pts/gol)", "EXTREMO\n(2.5s - Base 55 pts/gol)"};
-            int[] colDif = {color(65, 180, 240), color(255, 150, 35), color(235, 55, 55)};
-
-            for (int i = 0; i < TOTAL_DIFICULTADES_PEN; i++) {
-              float bx = width / 2 + (i - 1) * 290 * escalaX;
-              float by = 455 * escalaY;
-              boolean activa = (penDificultadActual == i);
-              boolean hover = (mouseX >= bx - 130 * escalaX && mouseX <= bx + 130 * escalaX && mouseY >= by - 50 * escalaY
-                  && mouseY <= by + 50 * escalaY);
-
-              stroke(activa ? color(255, 235, 80) : color(50, 30, 15));
-              strokeWeight(activa ? 6 * escalaY : 3.5f * escalaY);
-              fill(activa ? colDif[i] : (hover ? color(235, 225, 210) : color(210, 200, 188)));
-              rect(bx, by, 260 * escalaX, 100 * escalaY, 20);
-
-              fill(activa ? color(255) : color(45, 30, 20));
-              textSize(20 * escalaY);
-              text(etiqDif[i], bx, by);
-            }
-
-            boolean hoverJugar = (mouseX >= width / 2 - 180 * escalaX && mouseX <= width / 2 + 180 * escalaX && mouseY >= 615 * escalaY - 42 * escalaY
-                && mouseY <= 615 * escalaY + 42 * escalaY);
-            stroke(40, 20, 10);
-            strokeWeight(4 * escalaY);
-            fill(hoverJugar ? color(95, 225, 105) : color(70, 195, 80));
-            rect(width / 2, 615 * escalaY, 360 * escalaX, 84 * escalaY, 20);
-            fill(255);
-            textSize(30 * escalaY);
-            text("¡JUGAR!", width / 2, 613 * escalaY);
-            rectMode(CORNER);
+            dibujarInicioPenaltis();
           } else {
             if (penEstadoActual == 3) {
-              rectMode(CENTER);
-              stroke(255);
-              strokeWeight(4 * escalaY);
-              fill(15, 20, 35, 230);
-              rect(width / 2, height / 2 - 40 * escalaY, 680 * escalaX, 130 * escalaY, 24);
-              rectMode(CORNER);
-
-              textAlign(CENTER, CENTER);
-              textSize(42 * escalaY);
-              fill(colorResultado);
-              text(mensajeResultado, width / 2, height / 2 - 42 * escalaY);
+              dibujarAvisoTiroPenaltis();
 
               tiempoResultadoFrames++;
               if (tiempoResultadoFrames >= DURACION_PAUSA_RESULTADO) {
@@ -5195,6 +4817,7 @@ void draw() {
                   penEstadoActual = 1;
                 } else {
                   penEstadoActual = 4;
+                  reaccionClipAlResultado(goles >= 3);
                   if (!penaltisJugados) {
                     penaltisJugados = true;
                     if (goles >= 3) {
@@ -5215,58 +4838,7 @@ void draw() {
               }
             } else {
               if (penEstadoActual == 4) {
-                fill(0, 200);
-                noStroke();
-                rect(0, 0, width, height);
-
-                rectMode(CENTER);
-                stroke(65, 40, 15);
-                strokeWeight(5 * escalaY);
-                fill(255, 250, 238);
-                rect(width / 2, height / 2, 860 * escalaX, 560 * escalaY, 30);
-
-                textAlign(CENTER, CENTER);
-                textSize(44 * escalaY);
-                fill(45, 20, 10);
-                String titPen = (goles >= 3) ? "¡VICTORIA EN LOS PENALTIS!" : "FIN DE LA TANDA (DERROTA)";
-                text(titPen, width / 2 + 3 * escalaX, 215 * escalaY + 3 * escalaY);
-                fill(goles >= 3 ? color(55, 200, 80) : color(235, 95, 55));
-                text(titPen, width / 2, 215 * escalaY);
-
-                textSize(28 * escalaY);
-                fill(45, 180, 65);
-                text("Goles anotados: " + goles + " / 5   (+" + puntajePenaltis + " pts ganados)", width / 2, 295 * escalaY);
-                fill(225, 65, 65);
-                text("Atajadas: " + atajadas + "   |   Disparos fuera / postes: " + fallos, width / 2, 345 * escalaY);
-
-                // Aviso de nueva publicación en Pixagram
-                fill(goles >= 3 ? color(230, 248, 235) : color(255, 235, 232));
-                stroke(goles >= 3 ? color(70, 180, 95) : color(225, 80, 70));
-                strokeWeight(2.5f * escalaY);
-                rect(width / 2, 435 * escalaY, 740 * escalaX, 82 * escalaY, 14);
-
-                fill(35, 25, 20);
-                textSize(18 * escalaY);
-                if (goles >= 3) {
-                  text(
-                      "¡BIP! Mateo y Cristian subieron una foto celebrando tu victoria en Pixagram.\nRevisa el celular para responder antes de continuar la historia.",
-                      width / 2, 435 * escalaY);
-                } else {
-                  text(
-                      "¡BIP! Mateo y Cristian subieron a Pixagram una foto burlándose de la caída en cancha.\nDebes entrar a Pixagram y decidir cómo actuar ante esta situación.",
-                      width / 2, 435 * escalaY);
-                }
-
-                boolean hoverFin = (mouseX >= width / 2 - 220 * escalaX && mouseX <= width / 2 + 220 * escalaX
-                    && mouseY >= 555 * escalaY - 40 * escalaY && mouseY <= 555 * escalaY + 40 * escalaY);
-                stroke(40, 20, 10);
-                strokeWeight(4 * escalaY);
-                fill(hoverFin ? color(95, 175, 250) : color(65, 145, 225));
-                rect(width / 2, 555 * escalaY, 440 * escalaX, 78 * escalaY, 18);
-                fill(255);
-                textSize(24 * escalaY);
-                text("VER PUBLICACIÓN EN PIXAGRAM >>", width / 2, 553 * escalaY);
-                rectMode(CORNER);
+                dibujarResumenPenaltis();
               }
             }
           }
@@ -5315,8 +4887,10 @@ void draw() {
         // -----------------------------------------------------
         if (estadoActual == NIVEL2_INTRO) {
           background(6, 5, 12);
-          timerNivel2Intro++;
-          if (timerNivel2Intro == 1) {
+          if (!enPausa) {
+            timerNivel2Intro++;
+          }
+          if (!enPausa && timerNivel2Intro == 1) {
             reproducirSfx(SFX_INTRO_NIVEL, 0.7f);
           }
 
@@ -5381,7 +4955,7 @@ void draw() {
           text("Presiona [ENTER], [ESPACIO] o haz clic para comenzar ya", width / 2, height / 2 + 205 * escalaY);
           popStyle();
 
-          if (timerNivel2Intro >= DURACION_NIVEL2_INTRO && !enTransicion) {
+          if (!enPausa && timerNivel2Intro >= DURACION_NIVEL2_INTRO && !enTransicion) {
             nv2ReiniciarPartida = true;
             estadoDestino = NIVEL2;
             enTransicion = true;
@@ -5395,43 +4969,19 @@ void draw() {
           ejecutarMinijuegoNivel2();
         }
 
+        if ((estadoActual == HISTORIA3_ARCADE && !t3Activa) || (estadoActual == HISTORIA_POST_COCINA && !hcActiva)) {
+          background(10, 12, 20);
+        }
+
+        if (enPausa && estadoPermitePausaGlobal()) {
+          dibujarMenuPausaGlobal();
+        }
+
         // -----------------------------------------------------
         // PANEL DE VOLUMEN
         // -----------------------------------------------------
-        if (mostrarOpciones && (estadoActual == MENU || ((estadoActual == JUEGO || estadoActual == EXPLORACION) && enPausa))) {
-          pushStyle();
-          rectMode(CORNER);
-          fill(0, 180);
-          noStroke();
-          rect(0, 0, width, height);
-
-          int totalCuadros = 10;
-          float cuadroTam = (REF_W * 0.045f) * escalaX;
-          float cuadroEspacio = (REF_W * 0.012f) * escalaX;
-          float cuadrosAnchoTotal = (cuadroTam * totalCuadros) + (cuadroEspacio * (totalCuadros - 1));
-          float cuadrosInicioX = (width - cuadrosAnchoTotal) / 2;
-          float cuadrosY = (height - cuadroTam) / 2;
-
-          for (int i = 0; i < totalCuadros; i++) {
-            if (i < nivelVolumen) {
-              fill(100, 220, 120);
-            } else {
-              fill(60, 60, 60);
-            }
-            stroke(255);
-            strokeWeight(2);
-            rect(cuadrosInicioX + i * (cuadroTam + cuadroEspacio), cuadrosY, cuadroTam, cuadroTam, 4);
-          }
-
-          noStroke();
-          fill(255);
-          textAlign(CENTER, CENTER);
-          textSize(28 * escalaX);
-          text("VOLUMEN: " + (nivelVolumen * 10) + "%", width / 2, cuadrosY - (cuadroTam * 0.9f));
-          textSize(16 * escalaX);
-          fill(200);
-          text("Flechas IZQUIERDA/DERECHA para ajustar | 'M' para cerrar", width / 2, cuadrosY + cuadroTam + (cuadroTam * 0.7f));
-          popStyle();
+        if (mostrarOpciones && (estadoActual == MENU || (enPausa && estadoPermitePausaGlobal()))) {
+          dibujarPanelOpcionesGlobal();
         }
 
         // -----------------------------------------------------
@@ -5442,140 +4992,6 @@ void draw() {
           dibujarPanelResumenPuntos();
         }
         dibujarPanelDebugDesarrollador();
-
-        // -----------------------------------------------------
-        // TRANSICION (FUNDIDO A NEGRO)
-        // -----------------------------------------------------
-        if (enTransicion) {
-          alphaTransicion += velTransicion;
-          if (alphaTransicion >= 255) {
-            alphaTransicion = 255;
-
-            if (animandoEscalera && faseEscalera == 1) {
-              faseEscalera = 2;
-              if (tipoEscalera == 1) {
-                pisoActual = 1;
-                pjX = width * 0.76f;
-                pjY = height * 0.08f;
-                direccionSam = "sur";
-              } else {
-                pisoActual = 2;
-                pjX = width * 0.69f;
-                pjY = height * 0.35f;
-                direccionSam = "oeste";
-              }
-            }
-
-            // autoguardamos en el archivo plano antes de cambiar de pantalla si estabamos en la historia xd
-            if (estadoDestino == MENU && (estadoActual == JUEGO || estadoActual == EXPLORACION || estadoActual == PADRES || estadoActual == DESAYUNO
-                || estadoActual == NIVEL1 || estadoActual == NOVELA_ESCUELA || estadoActual == FIN_DIA_1 || estadoActual == TRANSICION_TEMPORAL
-                || estadoActual == NOVELA_COCINA || estadoActual == SELECCION_DIF_NV2 || estadoActual == NIVEL2)) {
-              guardarPartidaEnArchivo(estadoActual);
-            }
-
-            estadoActual = estadoDestino;
-            enTransicion = false;
-
-            // si acabamos de avanzar a una nueva escena de la historia, actualizamos el archivo plano
-            if (estadoActual == EXPLORACION || estadoActual == PADRES || estadoActual == DESAYUNO || estadoActual == NOVELA_ESCUELA
-                || estadoActual == FIN_DIA_1 || estadoActual == TRANSICION_TEMPORAL || estadoActual == NOVELA_COCINA
-                || estadoActual == SELECCION_DIF_NV2) {
-              guardarPartidaEnArchivo(estadoActual);
-            }
-
-            if (estadoActual == MENU) {
-              faseCamaraMenu = 0;
-              progresoCamaraCielo = 0.0f;
-              escribiendoNombrePartida = false;
-              cargarPartidasDesdeArchivo();
-              tieneCelular = false;
-              paginaPadres = 0;
-              feedbackPadresActivo = false;
-              habloConPadresPostCelular = false;
-              mostrandoDecisionPadres = false;
-              decisionPadresDesayuno = 0;
-              penaltisJugados = false;
-              decisionPixagramTomada = false;
-              decisionPixagramPenaltis = 0;
-              desayunoComido = false;
-              paginaDesayuno = 0;
-              dia1Terminado = false;
-              timerFinDia1 = 0;
-              samCercaDeMesa = false;
-              samCercaDeCama = false;
-              mostrandoModalDormir = false;
-              inicializarChatsDia1();
-              paginaCocina = 0;
-              mostrandoDecisionCocina = false;
-              decisionCocinaTomada = 0;
-              totalFeedPosts = 0;
-              bienestarDigital = 100.0f;
-              reputacionDigital = 15;
-              horaReloj = 9;
-              minutoReloj = 41;
-              desayunoLlamado = false;
-              desayunoTarde = false;
-              pisoActual = 2;
-              pjX = 500;
-              pjY = 500;
-              direccionSam = "sur";
-              samCaminando = false;
-              animandoEscalera = false;
-              faseEscalera = 0;
-              tipoEscalera = 0;
-              leyendoMensaje = false;
-              enPausa = false;
-              mostrarOpciones = false;
-              mostrarResumenPuntos = false;
-              opcionPausaSeleccionada = 0;
-              if (reproductorMp3 != null) {
-                reproductorMp3.stop();
-                reproduciendoMusica = false;
-              }
-              detenerYReiniciarTodosLosAudiosNv2();
-              if (videoCreditos != null) {
-                videoCreditos.pause();
-              }
-              if (videoFondo != null) {
-                videoFondo.jump(0.0f);
-                videoFondo.play();
-                videoFondo.volume(0);
-                ultimoReinicioVideo = millis();
-              }
-            } else {
-              if (videoFondo != null) {
-                videoFondo.pause();
-              }
-            }
-
-            if (estadoActual == JUEGO) {
-              mostrarSaltarIntro = true;
-              opcionSaltarIntro = 1;
-            }
-
-            if (estadoActual == CREDITOS) {
-              if (videoCreditos != null) {
-                videoCreditos.play();
-                videoCreditos.volume(volMaster);
-              }
-            }
-
-            actualizarMusicaFondoPorEstado();
-          }
-        } else {
-          if (alphaTransicion > 0) {
-            alphaTransicion -= velTransicion;
-            if (alphaTransicion < 0) {
-              alphaTransicion = 0;
-            }
-          }
-        }
-
-        if (alphaTransicion > 0) {
-          fill(0, alphaTransicion);
-          noStroke();
-          rect(0, 0, width, height);
-        }
 
         // -----------------------------------------------------
         // AVISO DE LOGRO DESBLOQUEADO
@@ -5598,23 +5014,31 @@ void draw() {
 // RUEDA DEL MOUSE
 // =====================================================
 void mouseWheel(MouseEvent event) {
+  if (transicionBloqueaEntrada()) return;
   boolean flujoRetornoActivo = true;
 
-  if (ruedaHistoriaDespuesCocina(event.getCount())) {
+  if (enPausa && estadoPermitePausaGlobal()) {
     flujoRetornoActivo = false;
   }
   if (flujoRetornoActivo) {
 
-    if (estadoActual == NIVEL1 && !enHome) {
-      if (appAbierta.equals("Pixagram") && currentTab == 1) {
-        float e = event.getCount();
-        scrollYFeed -= e * 36;
-        scrollYFeed = constrain(scrollYFeed, -maxScrollYFeed, 0);
-      } else {
-        if (appAbierta.equals("Pixel Art")) {
-          procesarRuedaPixelArt(event.getCount());
+    if (ruedaHistoriaDespuesCocina(event.getCount())) {
+      flujoRetornoActivo = false;
+    }
+    if (flujoRetornoActivo) {
+
+      if (estadoActual == NIVEL1 && !enHome) {
+        if (appAbierta.equals("Pixagram") && currentTab == 1) {
+          float e = event.getCount();
+          scrollYFeed -= e * 36;
+          scrollYFeed = constrain(scrollYFeed, -maxScrollYFeed, 0);
+        } else {
+          if (appAbierta.equals("Pixel Art")) {
+            procesarRuedaPixelArt(event.getCount());
+          }
         }
       }
+
     }
 
   }
@@ -5624,9 +5048,22 @@ void mouseWheel(MouseEvent event) {
 // MOUSE PRESSED
 // =====================================================
 void mousePressed() {
+  if (transicionBloqueaEntrada()) return;
+  prepararPresentacionDeNivelClip();
+  if (guiaPresentacionPendiente) {
+    terminarPresentacionClip();
+    return;
+  }
+  if (clicGuiaCelular()) return;
   if (!feriaClic()) {
 
     boolean flujoRetornoActivo = true;
+
+    if (enPausa && estadoPermitePausaGlobal()) {
+      procesarClicPausaGlobal();
+      flujoRetornoActivo = false;
+    }
+    if (flujoRetornoActivo) {
 
     if (clicHistoria3()) {
       flujoRetornoActivo = false;
@@ -5916,41 +5353,8 @@ void mousePressed() {
             }
           }
 
-          // ---------- Pausa ----------
-          if ((estadoActual == JUEGO || estadoActual == EXPLORACION) && enPausa) {
-            if (!mostrarOpciones) {
-              for (int k = 0; k < totalBotonesPausa; k++) {
-                if (mouseX > btnPausaX[k] && mouseX < btnPausaX[k] + btnPausaW[k] && mouseY > btnPausaY[k] && mouseY < btnPausaY[k] + btnPausaH[k]) {
-                  opcionPausaSeleccionada = k;
-                  if (sonidoClic != null) {
-                    sonidoClic.amp(0.5f * volMaster);
-                    sonidoClic.play();
-                  }
-
-                  if (k == 0) {
-                    enPausa = false;
-                  }
-                  if (k == 1) {
-                    // guardamos partida en el archivo .txt usando la misma estetica y fuente del proyecto xd
-                    guardarPartidaEnArchivo(estadoActual);
-                    crearPopupFlotante("¡Partida guardada en archivo!", width / 2, height * 0.22f, color(255, 220, 100));
-                  }
-                  if (k == 2) {
-                    mostrarOpciones = true;
-                  }
-                  if (k == 3) {
-                    guardarPartidaEnArchivo(estadoActual);
-                    enPausa = false;
-                    mostrarOpciones = false;
-                    estadoDestino = MENU;
-                    enTransicion = true;
-                  }
-                }
-              }
-            }
-          } else {
-            // ---------- Dialogo con los padres ----------
-            if (estadoActual == PADRES) {
+          // ---------- Dialogo con los padres ----------
+          if (estadoActual == PADRES) {
               if (!enTransicion && alphaTransicion <= 0) {
                 if (mostrandoDecisionPadres) {
                   procesarClicDecisionPadres();
@@ -6012,6 +5416,7 @@ void mousePressed() {
                         // Botón físico inferior en la barbilla del teléfono para volver a Home
                         if (mouseX >= telefonoX + (telefonoAncho * 0.32f) && mouseX <= telefonoX + (telefonoAncho * 0.68f)
                             && mouseY >= pantallaY + pantallaH && mouseY <= telefonoY + telefonoAlto) {
+                          registrarRegresoGuiaPixagram();
                           enHome = true;
                           if (appAbierta.equals("Pixel Art")) {
                             detenerMusicaPixelArt();
@@ -6032,14 +5437,13 @@ void mousePressed() {
                             espacioAppsX = (pantallaW - (columnasApps * tamApp)) / (columnasApps + 1);
                             int appsVisibles = juegosDesbloqueados ? totalApps : 7;
                             for (int i = 0; i < appsVisibles; i++) {
-                              int columna = i % columnasApps;
-                              int fila = i / columnasApps;
-                              float appX = espacioAppsX + columna * (tamApp + espacioAppsX);
-                              float appY = inicioAppsY + fila * (tamApp + espacioAppsY + 12);
+                              float appX = appCelularX(i);
+                              float appY = appCelularY(i);
 
                               if (relX >= appX && relX <= appX + tamApp && relY >= appY && relY <= appY + tamApp) {
                                 enHome = false;
                                 appAbierta = nombresApps[i];
+                                if (appAbierta.equals("Pixagram")) registrarEntradaGuiaPixagram();
                                 reproducirSfx(SFX_APP_ABRIR, 0.5f);
                                 if (appAbierta.equals("Parejas")) {
                                   iniciarJuegoParejas();
@@ -6250,6 +5654,7 @@ void mousePressed() {
                                   else {
                                     if (appAbierta.equals("Pixagram")) {
                                       if (relX >= 0 && relX <= 85 && relY >= 28 && relY <= 54) {
+                                        registrarRegresoGuiaPixagram();
                                         enHome = true;
                                         appAbierta = "";
                                         if (sonidoClic != null) {
@@ -6353,10 +5758,10 @@ void mousePressed() {
                         }
 
                         if (!accionCelularHecha) {
-                          float btnGuardarW = 440 * escalaX;
-                          float btnGuardarH = 38 * escalaY;
+                          float btnGuardarW = BOTON_GUARDAR_CELULAR_W * escalaX;
+                          float btnGuardarH = BOTON_GUARDAR_CELULAR_H * escalaY;
                           float btnGuardarX = (width - btnGuardarW) / 2;
-                          float btnGuardarY = height - btnGuardarH - 10;
+                          float btnGuardarY = height - btnGuardarH - BOTON_GUARDAR_CELULAR_MARGEN;
                           if (mouseX >= btnGuardarX && mouseX <= btnGuardarX + btnGuardarW && mouseY >= btnGuardarY
                               && mouseY <= btnGuardarY + btnGuardarH) {
                             if (penaltisJugados && !dia1Terminado) {
@@ -6412,11 +5817,10 @@ void mousePressed() {
                   if (estadoActual == EXPLORACION) {
                     if (dialogoCamaActivo) {
                       dialogoCamaActivo = false;
-                      juegosDesbloqueados = true;
                       estadoDestino = NIVEL1;
                       enHome = true;
                       appAbierta = "";
-                      mostrandoModalDormir = true;
+                      desbloquearJuegosConClip();
                       enTransicion = true;
                       if (sonidoClic != null) {
                         sonidoClic.amp(0.35f * volMaster);
@@ -6554,10 +5958,11 @@ void mousePressed() {
                 }
               }
             }
-          }
         }
 
       }
+
+    }
 
     }
 
@@ -6568,9 +5973,43 @@ void mousePressed() {
 // TECLADO
 // =====================================================
 void keyPressed() {
+  if (transicionBloqueaEntrada()) {
+    if (key == ESC) key = 0;
+    return;
+  }
+  prepararPresentacionDeNivelClip();
+  if (guiaPresentacionPendiente) {
+    if (key == ENTER || key == RETURN || key == ' '
+        || (guiaNivelPresentado == 0 && (key == ESC || keyCode == GUIA_TECLA))) {
+      terminarPresentacionClip();
+    }
+    if (key == ESC) key = 0;
+    return;
+  }
+  if (teclaGuiaCelular()) return;
+  if (keyCode == GUIA_TECLA && obtenerContextoGuia() >= 0) {
+    if (!guiaF1Presionada) alternarGuia();
+    guiaF1Presionada = true;
+    return;
+  }
   if (!feriaTecla()) {
 
     boolean flujoRetornoActivo = true;
+
+    boolean fueEscGlobal = (key == ESC || keyCode == ESC);
+    if (key == ESC) {
+      key = 0;
+    }
+    if (enPausa && estadoPermitePausaGlobal()) {
+      procesarTeclaPausaGlobal(key, keyCode, fueEscGlobal);
+      flujoRetornoActivo = false;
+    } else {
+      if (teclaAbrePausaGlobal(key, keyCode, fueEscGlobal)) {
+        activarPausaGlobal();
+        flujoRetornoActivo = false;
+      }
+    }
+    if (flujoRetornoActivo) {
 
     if (teclaHistoria3()) {
       flujoRetornoActivo = false;
@@ -6582,11 +6021,8 @@ void keyPressed() {
       }
       if (flujoRetornoActivo) {
 
-        boolean botonAtras = (key == 'm' || key == 'M' || keyCode == ESC);
-        boolean fueEsc = (keyCode == ESC);
-        if (key == ESC) {
-          key = 0;
-        }
+        boolean botonAtras = (key == 'm' || key == 'M' || fueEscGlobal);
+        boolean fueEsc = fueEscGlobal;
 
         boolean teclaConsumida = false;
         boolean enMinijuegoPantallaCompleta = (estadoActual == NIVEL1 && !enHome
@@ -6902,10 +6338,8 @@ void keyPressed() {
             }
           }
 
-          boolean pausaActiva = (estadoActual == JUEGO || estadoActual == EXPLORACION) && enPausa;
-
           // Panel de volumen
-          if ((estadoActual == MENU || pausaActiva) && mostrarOpciones) {
+          if (estadoActual == MENU && mostrarOpciones) {
             if ((key == 'd' || key == 'D' || keyCode == RIGHT) && nivelVolumen < 10) {
               nivelVolumen++;
               volMaster = nivelVolumen / 10.0f;
@@ -6945,59 +6379,8 @@ void keyPressed() {
             }
           }
 
-          // Menú de pausa
-          if (pausaActiva && !mostrarOpciones) {
-            if (key == 'p' || key == 'P' || botonAtras) {
-              enPausa = false;
-              reproducirSfx(SFX_PAUSA, 0.5f);
-            } else {
-              if (keyCode == LEFT || key == 'a' || key == 'A') {
-                if (opcionPausaSeleccionada > 0) {
-                  opcionPausaSeleccionada--;
-                }
-                if (sonidoHover != null) {
-                  sonidoHover.amp(0.15f * volMaster);
-                  sonidoHover.play();
-                }
-              }
-              if (keyCode == RIGHT || key == 'd' || key == 'D') {
-                if (opcionPausaSeleccionada < totalBotonesPausa - 1) {
-                  opcionPausaSeleccionada++;
-                }
-                if (sonidoHover != null) {
-                  sonidoHover.amp(0.15f * volMaster);
-                  sonidoHover.play();
-                }
-              }
-              if (keyCode == ENTER || key == ENTER || key == RETURN || key == ' ') {
-                if (sonidoClic != null) {
-                  sonidoClic.amp(0.5f * volMaster);
-                  sonidoClic.play();
-                }
-                if (opcionPausaSeleccionada == 0) {
-                  enPausa = false;
-                }
-                if (opcionPausaSeleccionada == 1) {
-                  guardarPartidaEnArchivo(estadoActual);
-                  crearPopupFlotante("¡Partida guardada en archivo!", width / 2, height * 0.22f, color(255, 220, 100));
-                }
-                if (opcionPausaSeleccionada == 2) {
-                  mostrarOpciones = true;
-                }
-                if (opcionPausaSeleccionada == 3) {
-                  guardarPartidaEnArchivo(estadoActual);
-                  enPausa = false;
-                  mostrarOpciones = false;
-                  estadoDestino = MENU;
-                  enTransicion = true;
-                }
-              }
-            }
-          }
-
           // Menú principal y pantalla de seleccion en el cielo
-          else {
-            if (estadoActual == MENU && !mostrarOpciones) {
+          if (estadoActual == MENU && !mostrarOpciones) {
               if (!procesarTeclaMenuCielo(key, keyCode, botonAtras)) {
                 if (key == '2') {
                   if (sonidoClic != null) {
@@ -7360,58 +6743,51 @@ void keyPressed() {
                       // Intro
                       else {
                         if (estadoActual == JUEGO) {
-                          if (key == 'p' || key == 'P' || botonAtras) {
-                            enPausa = !enPausa;
-                            reproducirSfx(SFX_PAUSA, 0.5f);
-                            opcionPausaSeleccionada = 0;
-                            mostrarOpciones = false;
+                          if (mostrarSaltarIntro) {
+                            if (key == 'a' || key == 'A' || keyCode == LEFT) {
+                              opcionSaltarIntro = 0;
+                              if (sonidoHover != null) {
+                                sonidoHover.amp(0.15f * volMaster);
+                                sonidoHover.play();
+                              }
+                            }
+                            if (key == 'd' || key == 'D' || keyCode == RIGHT) {
+                              opcionSaltarIntro = 1;
+                              if (sonidoHover != null) {
+                                sonidoHover.amp(0.15f * volMaster);
+                                sonidoHover.play();
+                              }
+                            }
+                            if (keyCode == ENTER || key == ' ') {
+                              if (sonidoClic != null) {
+                                sonidoClic.amp(0.5f * volMaster);
+                                sonidoClic.play();
+                              }
+                              if (opcionSaltarIntro == 0) {
+                                estadoDestino = EXPLORACION;
+                                enTransicion = true;
+                                paginaActual = 0;
+                                mostrarSaltarIntro = false;
+                              }
+                              if (opcionSaltarIntro == 1) {
+                                mostrarSaltarIntro = false;
+                                ultimoTextoDialogo = "";
+                                charsVisibles = 0;
+                                dialogoCompletado = false;
+                              }
+                            }
                           } else {
-                            if (mostrarSaltarIntro) {
-                              if (key == 'a' || key == 'A' || keyCode == LEFT) {
-                                opcionSaltarIntro = 0;
-                                if (sonidoHover != null) {
-                                  sonidoHover.amp(0.15f * volMaster);
-                                  sonidoHover.play();
-                                }
-                              }
-                              if (key == 'd' || key == 'D' || keyCode == RIGHT) {
-                                opcionSaltarIntro = 1;
-                                if (sonidoHover != null) {
-                                  sonidoHover.amp(0.15f * volMaster);
-                                  sonidoHover.play();
-                                }
-                              }
-                              if (keyCode == ENTER || key == ' ') {
-                                if (sonidoClic != null) {
-                                  sonidoClic.amp(0.5f * volMaster);
-                                  sonidoClic.play();
-                                }
-                                if (opcionSaltarIntro == 0) {
+                            if (keyCode == ENTER || key == ' ') {
+                              if (!dialogoCompletado) {
+                                charsVisibles = ultimoTextoDialogo.length();
+                                dialogoCompletado = true;
+                              } else {
+                                if (paginaActual < totalPaginasLore - 1) {
+                                  paginaActual++;
+                                } else {
                                   estadoDestino = EXPLORACION;
                                   enTransicion = true;
                                   paginaActual = 0;
-                                  mostrarSaltarIntro = false;
-                                }
-                                if (opcionSaltarIntro == 1) {
-                                  mostrarSaltarIntro = false;
-                                  ultimoTextoDialogo = "";
-                                  charsVisibles = 0;
-                                  dialogoCompletado = false;
-                                }
-                              }
-                            } else {
-                              if (keyCode == ENTER || key == ' ') {
-                                if (!dialogoCompletado) {
-                                  charsVisibles = ultimoTextoDialogo.length();
-                                  dialogoCompletado = true;
-                                } else {
-                                  if (paginaActual < totalPaginasLore - 1) {
-                                    paginaActual++;
-                                  } else {
-                                    estadoDestino = EXPLORACION;
-                                    enTransicion = true;
-                                    paginaActual = 0;
-                                  }
                                 }
                               }
                             }
@@ -7442,7 +6818,7 @@ void keyPressed() {
                                   }
                                 }
 
-                                if (coincideCombo && !logrosDesbloqueados[0]) {
+                                if (coincideCombo && (!logrosDesbloqueados[0] || !logrosPartidaActual[0])) {
                                   desbloquearLogro(0);
                                 }
                               }
@@ -7456,12 +6832,6 @@ void keyPressed() {
                           // Exploración
                           else {
                             if (estadoActual == EXPLORACION) {
-                              if (key == 'p' || key == 'P' || botonAtras) {
-                                enPausa = !enPausa;
-                                reproducirSfx(SFX_PAUSA, 0.5f);
-                                opcionPausaSeleccionada = 0;
-                                mostrarOpciones = false;
-                              } else {
                                 boolean puedeInteractuar = !animandoEscalera && !enTransicion && alphaTransicion <= 0;
 
                                 if (mostrandoModalDormir) {
@@ -7520,32 +6890,18 @@ void keyPressed() {
                                 } else {
                                   if (puedeInteractuar
                                       && ((key == 'e' || key == 'E') || (dialogoCamaActivo && (keyCode == ENTER || key == RETURN || key == ' ')))) {
-                                    boolean sobreEscalera = (pjX + hitOffX < escX + escW && pjX + hitOffX + hitW > escX && pjY + hitOffY < escY + escH
-                                        && pjY + hitOffY + hitH > escY);
+                                    boolean sobreEscalera = samCercaDeAccesoEscalera();
 
                                     if (sobreEscalera) {
-                                      animandoEscalera = true;
-                                      reproducirSfx(SFX_ESCALERA, 0.6f);
-                                      faseEscalera = 1;
-                                      leyendoMensaje = false;
-                                      enTransicion = true;
-                                      estadoDestino = EXPLORACION;
-                                      if (pisoActual == 2) {
-                                        tipoEscalera = 1;
-                                        direccionSam = "este";
-                                      } else {
-                                        tipoEscalera = 2;
-                                        direccionSam = "norte";
-                                      }
+                                      iniciarRecorridoEscalera();
                                     } else {
                                       if (pisoActual == 2 && samCercaDeCama && tieneCelular && desayunoComido) {
                                         if (dialogoCamaActivo) {
                                           dialogoCamaActivo = false;
-                                          juegosDesbloqueados = true;
                                           estadoDestino = NIVEL1;
                                           enHome = true;
                                           appAbierta = "";
-                                          mostrandoModalDormir = true;
+                                          desbloquearJuegosConClip();
                                           enTransicion = true;
                                           if (sonidoClic != null) {
                                             sonidoClic.amp(0.35f * volMaster);
@@ -7631,7 +6987,6 @@ void keyPressed() {
                                     }
                                   }
                                 }
-                              }
                             }
 
                             // Logros
@@ -7651,10 +7006,11 @@ void keyPressed() {
                 }
               }
             }
-          }
         }
 
       }
+
+    }
 
     }
 
@@ -7665,6 +7021,8 @@ void keyPressed() {
 // KEY RELEASED
 // =====================================================
 void keyReleased() {
+  if (key == ENTER || key == RETURN || key == ' ') guiaAvanceCelularPulsado = false;
+  if (keyCode == GUIA_TECLA) guiaF1Presionada = false;
   boolean flujoRetornoActivo = true;
 
   if (soltarTeclaHistoria3()) {
@@ -7754,6 +7112,7 @@ void mouseReleased() {
 }
 
 void mouseDragged() {
+  if (transicionBloqueaEntrada()) return;
   if (estadoActual == NIVEL1 && !enHome) {
     if (appAbierta.equals("Pixel Art")) {
       procesarArrastrePixelArt(mouseButton);
@@ -8106,7 +7465,9 @@ void procesarClicDesayuno() {
 // =========================================================================
 void dibujarFinDia1() {
   background(0);
-  timerFinDia1++;
+  if (!enPausa) {
+    timerFinDia1++;
+  }
 
   float progresoIntro = constrain(timerFinDia1 / float(DURACION_FIN_DIA_1), 0, 1);
   float alfaTexto = 255;
@@ -8144,7 +7505,7 @@ void dibujarFinDia1() {
   text("(Presiona ESPACIO o haz clic para continuar)", width / 2, height - 70 * escalaY);
   popStyle();
 
-  if (timerFinDia1 >= DURACION_FIN_DIA_1 && !enTransicion) {
+  if (!enPausa && timerFinDia1 >= DURACION_FIN_DIA_1 && !enTransicion) {
     avanzarDesdeFinDia1();
   }
 }
@@ -8264,6 +7625,548 @@ void actualizarMusicaFondoPorEstado() {
       if (musicaFondoDeberiaSonar || musicaFondo.isPlaying()) {
         musicaFondo.stop();
         musicaFondoDeberiaSonar = false;
+      }
+    }
+  }
+}
+
+void dibujarSamExploracion() {
+  pushStyle();
+  pushMatrix();
+  imageMode(CORNER);
+  rectMode(CORNER);
+  noTint();
+  PImage spriteActual = null;
+  if (samCaminando) {
+    if (direccionSam.equals("norte")) {
+      spriteActual = spriteCaminarNorte[frameAnimActual];
+    } else {
+      if (direccionSam.equals("sur")) {
+        spriteActual = spriteCaminarSur[frameAnimActual];
+      } else {
+        if (direccionSam.equals("este")) {
+          spriteActual = spriteCaminarEste[frameAnimActual];
+        } else {
+          if (direccionSam.equals("oeste")) {
+            spriteActual = spriteCaminarOeste[frameAnimActual];
+          }
+        }
+      }
+    }
+  } else {
+    if (direccionSam.equals("norte")) {
+      spriteActual = spriteIdle[0];
+    } else {
+      if (direccionSam.equals("sur")) {
+        spriteActual = spriteIdle[1];
+      } else {
+        if (direccionSam.equals("este")) {
+          spriteActual = spriteIdle[2];
+        } else {
+          if (direccionSam.equals("oeste")) {
+            spriteActual = spriteIdle[3];
+          }
+        }
+      }
+    }
+  }
+
+  if (animandoEscalera) {
+    float xPies = piesSamX();
+    float yPies = piesSamY();
+    translate(xPies, yPies);
+    scale(escalaSamEscalera);
+    translate(-xPies, -yPies);
+  }
+  if (spriteActual != null) {
+    image(spriteActual, pjX, pjY);
+  } else {
+    fill(100, 255, 100);
+    noStroke();
+    rect(pjX, pjY, pjW, pjH);
+  }
+  popMatrix();
+  popStyle();
+}
+
+void dibujarPadresExploracion(float pSpriteW, float pSpriteH) {
+  pushStyle();
+  imageMode(CORNER);
+  rectMode(CORNER);
+  noTint();
+  if (imgMama != null && imgMama.width > 0) {
+    image(imgMama, padresX, padresY, pSpriteW, pSpriteH);
+  } else {
+    noStroke();
+    fill(255, 190, 210);
+    rect(padresX, padresY, pSpriteW, pSpriteH);
+  }
+  if (imgPapa != null && imgPapa.width > 0) {
+    image(imgPapa, padresX + padresSep, padresY, pSpriteW, pSpriteH);
+  } else {
+    noStroke();
+    fill(190, 210, 255);
+    rect(padresX + padresSep, padresY, pSpriteW, pSpriteH);
+  }
+
+  fill(255);
+  textAlign(CENTER, BOTTOM);
+  textSize(14 * escalaX);
+  text("MAMÁ", padresX + (pSpriteW * 0.5f), padresY);
+  text("PAPÁ", padresX + padresSep + (pSpriteW * 0.5f), padresY);
+  popStyle();
+}
+
+void dibujarAvisoInteraccionExploracion(String msg) {
+  pushStyle();
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(20 * escalaX);
+  float mitadW = textWidth(msg) * 0.5f;
+  float minX = limIzq + mitadW + 8 * escalaX;
+  float maxX = limDer - mitadW - 8 * escalaX;
+  float posX = pjX + (pjW * 0.5f);
+  if (minX <= maxX) {
+    posX = constrain(posX, minX, maxX);
+  } else {
+    posX = (limIzq + limDer) * 0.5f;
+  }
+  float posY = max(24 * escalaY, pjY - 20 * escalaY);
+  text(msg, posX, posY);
+  popStyle();
+}
+
+boolean pixagramPermitePausaGlobal() {
+  return estadoActual == NIVEL1 && !enHome && appAbierta.equals("Pixagram") && !mostrandoModalDormir;
+}
+
+boolean estadoPermitePausaGlobal() {
+  boolean permitido = false;
+  if (!feriaActiva && !enTransicion && !mostrarResumenPuntos) {
+    if (t3Activa || hcActiva || pixagramPermitePausaGlobal()) {
+      permitido = true;
+    } else {
+      if (estadoActual == JUEGO || estadoActual == PADRES || estadoActual == DESAYUNO
+          || estadoActual == NOVELA_ESCUELA || estadoActual == FIN_DIA_1
+          || estadoActual == TRANSICION_TEMPORAL || estadoActual == NOVELA_COCINA
+          || estadoActual == SELECCION_DIF_NV2 || estadoActual == NIVEL2_INTRO
+          || estadoActual == NIVEL2) {
+        permitido = true;
+      } else {
+        if (estadoActual == EXPLORACION && !mostrandoModalDormir && !animandoEscalera) {
+          permitido = true;
+        }
+      }
+    }
+  }
+  return permitido;
+}
+
+boolean teclaAbrePausaGlobal(char k, int kCode, boolean fueEsc) {
+  if (pixagramPermitePausaGlobal()) return fueEsc && estadoPermitePausaGlobal();
+  boolean esP = (k == 'p') || (k == 'P' && !modoDebug);
+  boolean esM = (k == 'm' || k == 'M');
+  boolean esArcadeM = (t3Activa && t3Etapa == 4 && !t3IntroActiva && !finalNivel3Activo
+      && (nv3_estadoMenu == 2 || nv3_pantalla >= 1));
+  boolean mAbrePausa = (t3Activa && !esArcadeM) || hcActiva || estadoActual == JUEGO
+      || estadoActual == EXPLORACION || estadoActual == FIN_DIA_1
+      || estadoActual == TRANSICION_TEMPORAL || estadoActual == NOVELA_COCINA
+      || estadoActual == SELECCION_DIF_NV2 || estadoActual == NIVEL2_INTRO
+      || estadoActual == NIVEL2;
+  boolean abre = estadoPermitePausaGlobal() && (esP || fueEsc || (esM && mAbrePausa));
+  return abre;
+}
+
+int obtenerEstadoRealParaGuardado() {
+  int est = estadoActual;
+  if (t3Activa) {
+    est = HISTORIA3_ARCADE;
+  } else {
+    if (hcActiva) {
+      est = HISTORIA_POST_COCINA;
+    }
+  }
+  return est;
+}
+
+void activarPausaGlobal() {
+  enPausa = true;
+  mostrarOpciones = false;
+  opcionPausaSeleccionada = 0;
+  opcionPausaHover = -1;
+  pausaInicioMs = millis();
+
+  movArriba = false;
+  movAbajo = false;
+  movIzquierda = false;
+  movDerecha = false;
+  cantTeclasDir = 0;
+
+  nv2TeclaIzqPresionada = false;
+  nv2TeclaDerPresionada = false;
+  for (int c = 0; c < MAX_CARRILES_NV2; c++) {
+    nv2TeclaCarrilPresionada[c] = false;
+  }
+
+  nv2AudioEstabaSonandoAntesDePausa = false;
+  if (estadoActual == NIVEL2 && !hcActiva && !t3Activa && nv2SubEstado == NV2_SUB_JUGANDO && !nv2ExtremoFaseAlerta && nv2Audio != null) {
+    try {
+      if (nv2Audio.isPlaying()) {
+        nv2AudioPosPausaSeg = nv2Audio.position();
+        nv2AudioEstabaSonandoAntesDePausa = true;
+        nv2Audio.pause();
+      }
+    } catch (Exception e) {
+    }
+  }
+
+  nv3VideoEstabaSonandoAntesDePausa = false;
+  if (t3Activa && t3Etapa == 4 && !t3IntroActiva && !finalNivel3Activo && nv3_videoListo && nv3_videoFondo != null && nv3_estadoMenu >= 0) {
+    try {
+      nv3VideoEstabaSonandoAntesDePausa = true;
+      nv3_videoFondo.pause();
+    } catch (Exception e) {
+    }
+  }
+
+  if (t3Activa && t3Etapa == 4 && !t3IntroActiva && !finalNivel3Activo) {
+    nv3_limpiarControles();
+  }
+
+  reproducirSfx(SFX_PAUSA, 0.5f);
+}
+
+void desactivarPausaGlobal() {
+  int deltaPausa = max(0, millis() - pausaInicioMs);
+  enPausa = false;
+  mostrarOpciones = false;
+
+  if (estadoActual == NIVEL2 && !hcActiva && !t3Activa && nv2SubEstado == NV2_SUB_JUGANDO) {
+    nv2TiempoInicioMs += deltaPausa;
+    if (nv2ExtremoFaseAlerta) {
+      nv2ExtremoAlertaInicioMs += deltaPausa;
+    }
+    if (nv2AudioEstabaSonandoAntesDePausa && !nv2ExtremoFaseAlerta && nv2Audio != null) {
+      try {
+        float pos = max(0.0f, nv2AudioPosPausaSeg);
+        float dur = nv2Audio.duration();
+        if (dur > 0.1f) {
+          pos = constrain(pos, 0.0f, max(0.0f, dur - 0.05f));
+        }
+        nv2Audio.cue(pos);
+        nv2Audio.rate(1.0f);
+        nv2Audio.amp(volMaster);
+        nv2Audio.jump(pos);
+        if (!nv2Audio.isPlaying()) {
+          nv2Audio.play();
+        }
+      } catch (Exception e) {
+        try {
+          if (!nv2Audio.isPlaying()) nv2Audio.play();
+        } catch (Exception ex) {
+        }
+      }
+    }
+  }
+  nv2AudioEstabaSonandoAntesDePausa = false;
+
+  if (t3Activa) {
+    if (t3Etapa == 2) {
+      t3InicioEscena += deltaPausa;
+    }
+    t3TickTexto = millis();
+    if (t3IntroActiva) {
+      t3IntroInicio += deltaPausa;
+    }
+    if (finalNivel3Activo) {
+      finalNivel3InicioCreditos += deltaPausa;
+    }
+    if (t3Etapa == 4 && !t3IntroActiva && !finalNivel3Activo) {
+      nv3_ultimoTiempo = millis();
+      nv3_limpiarControles();
+      if (nv3VideoEstabaSonandoAntesDePausa && nv3_videoListo && nv3_videoFondo != null && nv3_estadoMenu >= 0) {
+        try {
+          nv3_videoFondo.loop();
+          nv3_videoFondo.volume(0);
+        } catch (Exception e) {
+        }
+      }
+    }
+  }
+  nv3VideoEstabaSonandoAntesDePausa = false;
+
+  reproducirSfx(SFX_PAUSA, 0.5f);
+}
+
+void ejecutarOpcionPausaGlobal(int opcion) {
+  if (opcion == 0) {
+    desactivarPausaGlobal();
+  } else {
+    if (opcion == 1) {
+      guardarPartidaEnArchivo(obtenerEstadoRealParaGuardado());
+      crearPopupFlotante("¡Partida guardada en archivo!", width / 2, height * 0.22f, color(255, 220, 100));
+    } else {
+      if (opcion == 2) {
+        mostrarOpciones = true;
+      } else {
+        if (opcion == 3) {
+          boolean estabaEnHc = hcActiva;
+          guardarPartidaEnArchivo(obtenerEstadoRealParaGuardado());
+          enPausa = false;
+          mostrarOpciones = false;
+          nv2AudioEstabaSonandoAntesDePausa = false;
+          nv3VideoEstabaSonandoAntesDePausa = false;
+          skipAutoSaveEnMenu = true;
+          detenerYReiniciarTodosLosAudiosNv2();
+          if (hcActiva) {
+            reiniciarHistoriaDespuesCocina();
+          }
+          if (t3Activa) {
+            t3Reiniciar();
+          }
+          if (estabaEnHc && estadoActual == NIVEL2) {
+            estadoActual = HISTORIA_POST_COCINA;
+          }
+          estadoDestino = MENU;
+          enTransicion = true;
+        }
+      }
+    }
+  }
+}
+
+void dibujarMenuPausaGlobal() {
+  pushStyle();
+  rectMode(CORNER);
+  imageMode(CORNER);
+  noTint();
+  if (fuenteComic != null) {
+    textFont(fuenteComic);
+  }
+
+  fill(0, 150);
+  noStroke();
+  rect(0, 0, width, height);
+
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(40 * escalaX);
+  text("PAUSA", width / 2, height * 0.3f);
+
+  float pausaBtnAncho = (REF_W * 0.18f) * escalaX;
+  float pausaBtnAlto = (REF_H * 0.08f) * escalaY;
+  float pausaEspacio = (REF_W * 0.03f) * escalaX;
+  float pausaAnchoTotal = (pausaBtnAncho * totalBotonesPausa) + (pausaEspacio * (totalBotonesPausa - 1));
+  float pausaInicioX = (width - pausaAnchoTotal) / 2;
+  float pausaY = height * 0.5f;
+
+  for (int k = 0; k < totalBotonesPausa; k++) {
+    btnPausaW[k] = pausaBtnAncho;
+    btnPausaH[k] = pausaBtnAlto;
+    btnPausaX[k] = pausaInicioX + (k * (pausaBtnAncho + pausaEspacio));
+    btnPausaY[k] = pausaY;
+  }
+
+  if (!mostrarOpciones) {
+    int hoverActual = -1;
+    for (int k = 0; k < totalBotonesPausa; k++) {
+      if (mouseX > btnPausaX[k] && mouseX < btnPausaX[k] + btnPausaW[k] && mouseY > btnPausaY[k] && mouseY < btnPausaY[k] + btnPausaH[k]) {
+        hoverActual = k;
+      }
+    }
+    if (hoverActual != opcionPausaHover && hoverActual != -1) {
+      opcionPausaSeleccionada = hoverActual;
+      if (sonidoHover != null) {
+        sonidoHover.amp(0.15f * volMaster);
+        sonidoHover.play();
+      }
+    }
+    opcionPausaHover = hoverActual;
+  }
+
+  for (int k = 0; k < totalBotonesPausa; k++) {
+    boolean seleccionado = (opcionPausaSeleccionada == k);
+
+    if (seleccionado) {
+      fill(255, 220, 100);
+    } else {
+      fill(180, 120, 60);
+    }
+    stroke(100, 50, 20);
+    strokeWeight(4);
+    rect(btnPausaX[k], btnPausaY[k], btnPausaW[k], btnPausaH[k], 8);
+
+    noStroke();
+    if (seleccionado) {
+      fill(255, 240, 150, 100);
+    } else {
+      fill(200, 150, 90, 100);
+    }
+    rect(btnPausaX[k] + 4, btnPausaY[k] + 4, btnPausaW[k] - 8, btnPausaH[k] / 2 - 4, 4);
+
+    textSize(24 * escalaX);
+    if (!seleccionado) {
+      fill(100, 50, 20);
+      text(botonesPausa[k], btnPausaX[k] + (btnPausaW[k] / 2) + 2, btnPausaY[k] + (btnPausaH[k] / 2) + 2);
+      fill(255);
+    } else {
+      fill(50, 20, 0);
+    }
+    text(botonesPausa[k], btnPausaX[k] + (btnPausaW[k] / 2), btnPausaY[k] + (btnPausaH[k] / 2));
+  }
+
+  if (!mostrarOpciones) {
+    dibujarIndicativoFlotante(indicativoGuardar, btnPausaX[1] + btnPausaW[1] * 0.5f, btnPausaY[1] - 34 * escalaY, 90 * escalaX, 2.5f);
+  }
+
+  fill(180);
+  textSize(16 * escalaX);
+  text("LEFT/RIGHT para navegar | ENTER para confirmar | P o ESC para reanudar", width / 2, pausaY + pausaBtnAlto + (20 * escalaY));
+  popStyle();
+}
+
+void dibujarPanelOpcionesGlobal() {
+  pushStyle();
+  rectMode(CORNER);
+  if (fuenteComic != null) {
+    textFont(fuenteComic);
+  }
+  fill(0, 180);
+  noStroke();
+  rect(0, 0, width, height);
+
+  int totalCuadros = 10;
+  float cuadroTam = (REF_W * 0.045f) * escalaX;
+  float cuadroEspacio = (REF_W * 0.012f) * escalaX;
+  float cuadrosAnchoTotal = (cuadroTam * totalCuadros) + (cuadroEspacio * (totalCuadros - 1));
+  float cuadrosInicioX = (width - cuadrosAnchoTotal) / 2;
+  float cuadrosY = (height - cuadroTam) / 2;
+
+  for (int i = 0; i < totalCuadros; i++) {
+    if (i < nivelVolumen) {
+      fill(100, 220, 120);
+    } else {
+      fill(60, 60, 60);
+    }
+    stroke(255);
+    strokeWeight(2);
+    rect(cuadrosInicioX + i * (cuadroTam + cuadroEspacio), cuadrosY, cuadroTam, cuadroTam, 4);
+  }
+
+  noStroke();
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(28 * escalaX);
+  text("VOLUMEN: " + (nivelVolumen * 10) + "%", width / 2, cuadrosY - (cuadroTam * 0.9f));
+  textSize(16 * escalaX);
+  fill(200);
+  text("Flechas IZQUIERDA/DERECHA para ajustar | 'M' o ESC para cerrar", width / 2, cuadrosY + cuadroTam + (cuadroTam * 0.7f));
+  popStyle();
+}
+
+void procesarClicPausaGlobal() {
+  if (!mostrarOpciones) {
+    boolean clicHecho = false;
+    for (int k = 0; k < totalBotonesPausa && !clicHecho; k++) {
+      if (mouseX > btnPausaX[k] && mouseX < btnPausaX[k] + btnPausaW[k] && mouseY > btnPausaY[k] && mouseY < btnPausaY[k] + btnPausaH[k]) {
+        opcionPausaSeleccionada = k;
+        if (sonidoClic != null) {
+          sonidoClic.amp(0.5f * volMaster);
+          sonidoClic.play();
+        }
+        ejecutarOpcionPausaGlobal(k);
+        clicHecho = true;
+      }
+    }
+  }
+}
+
+void procesarTeclaPausaGlobal(char k, int kCode, boolean fueEsc) {
+  boolean esAtras = (k == 'm' || k == 'M' || fueEsc);
+  if (mostrarOpciones) {
+    if ((k == 'd' || k == 'D' || kCode == RIGHT) && nivelVolumen < 10) {
+      nivelVolumen++;
+      volMaster = nivelVolumen / 10.0f;
+      if (musicaFondo != null) {
+        musicaFondo.amp(volMaster);
+      }
+      if (reproductorMp3 != null) {
+        reproductorMp3.amp(volMaster);
+      }
+      if (nv2Audio != null) {
+        nv2Audio.amp(volMaster);
+      }
+      if (nv3_musicaSala != null) {
+        nv3_musicaSala.amp(0.45f * volMaster);
+      }
+      if (nv3_musicaJuego != null) {
+        nv3_musicaJuego.amp(0.50f * volMaster);
+      }
+      if (nv3_musicaVictoria != null) {
+        nv3_musicaVictoria.amp(0.50f * volMaster);
+      }
+      if (sonidoClic != null) {
+        sonidoClic.amp(0.5f * volMaster);
+        sonidoClic.play();
+      }
+    }
+    if ((k == 'a' || k == 'A' || kCode == LEFT) && nivelVolumen > 1) {
+      nivelVolumen--;
+      volMaster = nivelVolumen / 10.0f;
+      if (musicaFondo != null) {
+        musicaFondo.amp(volMaster);
+      }
+      if (reproductorMp3 != null) {
+        reproductorMp3.amp(volMaster);
+      }
+      if (nv2Audio != null) {
+        nv2Audio.amp(volMaster);
+      }
+      if (nv3_musicaSala != null) {
+        nv3_musicaSala.amp(0.45f * volMaster);
+      }
+      if (nv3_musicaJuego != null) {
+        nv3_musicaJuego.amp(0.50f * volMaster);
+      }
+      if (nv3_musicaVictoria != null) {
+        nv3_musicaVictoria.amp(0.50f * volMaster);
+      }
+      if (sonidoClic != null) {
+        sonidoClic.amp(0.5f * volMaster);
+        sonidoClic.play();
+      }
+    }
+    if (esAtras || kCode == ENTER || k == RETURN || k == ' ') {
+      mostrarOpciones = false;
+    }
+  } else {
+    if (k == 'p' || k == 'P' || esAtras) {
+      desactivarPausaGlobal();
+    } else {
+      if (kCode == LEFT || k == 'a' || k == 'A') {
+        if (opcionPausaSeleccionada > 0) {
+          opcionPausaSeleccionada--;
+        }
+        if (sonidoHover != null) {
+          sonidoHover.amp(0.15f * volMaster);
+          sonidoHover.play();
+        }
+      }
+      if (kCode == RIGHT || k == 'd' || k == 'D') {
+        if (opcionPausaSeleccionada < totalBotonesPausa - 1) {
+          opcionPausaSeleccionada++;
+        }
+        if (sonidoHover != null) {
+          sonidoHover.amp(0.15f * volMaster);
+          sonidoHover.play();
+        }
+      }
+      if (kCode == ENTER || k == RETURN || k == ' ') {
+        if (sonidoClic != null) {
+          sonidoClic.amp(0.5f * volMaster);
+          sonidoClic.play();
+        }
+        ejecutarOpcionPausaGlobal(opcionPausaSeleccionada);
       }
     }
   }

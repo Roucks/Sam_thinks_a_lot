@@ -3,6 +3,7 @@
 // Ver LEEME_Continuacion_Cocina.txt para las conexiones.
 // Solo funciones, arreglos, variables e instrucciones usadas en el proyecto.
 
+final int HISTORIA_POST_COCINA = 21;
 PFont hcFuenteTexto;
 PImage hcImagenBuena;
 PImage hcImagenMala;
@@ -386,10 +387,6 @@ boolean dibujarHistoriaDespuesCocina() {
   boolean flujoRetornoActivo = true;
   boolean flujoRetornoValor = false;
 
-  // Al terminar la canción o perder, entrar en la consecuencia sin esperar
-  // una tecla; hcIniciar también detiene el avance automático del bot.
-  if (!hcActiva && hcPuedeContinuar())
-    hcIniciar();
   if (!hcActiva) {
     flujoRetornoValor = false;
     flujoRetornoActivo = false;
@@ -437,6 +434,12 @@ boolean dibujarHistoriaDespuesCocina() {
     else
       hcDibujarDialogo();
     popStyle();
+    if (enPausa && estadoPermitePausaGlobal()) {
+      dibujarMenuPausaGlobal();
+      if (mostrarOpciones) {
+        dibujarPanelOpcionesGlobal();
+      }
+    }
     actualizarYDibujarPopupsYParticulas();
     dibujarAvisoLogro();
     {
@@ -773,7 +776,7 @@ void hcDibujarDialogo() {
     charsVisibles = 0;
     dialogoCompletado = false;
   }
-  if (!dialogoCompletado) {
+  if (!dialogoCompletado && !enPausa) {
     charsVisibles = min(texto.length(), charsVisibles + velTypewriter);
     if (int(charsVisibles) >= texto.length()) dialogoCompletado = true;
   }

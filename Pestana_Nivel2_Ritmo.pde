@@ -2336,6 +2336,7 @@ void aplicarDanoPlatoNv2(float cantidadDano) {
   if (nv2VidaPlato <= 0.0f && nv2SubEstado == NV2_SUB_JUGANDO) {
     nv2VidaPlato = 0.0f;
     nv2SubEstado = NV2_SUB_DERROTA;
+    reaccionClipAlResultado(false);
     reproducirSfx(SFX_NV2_DERROTA, 0.8f);
     detenerYReiniciarTodosLosAudiosNv2();
     activarScreenShake(24, 12.0f);
@@ -2489,7 +2490,7 @@ void ejecutarBotAutoPlayNv2(int tiempoActualMs) {
 // MOTOR PRINCIPAL DE DIBUJO Y FÍSICA DEL NIVEL 2 (OPTIMIZADO CON PGRAPHICS)
 // =========================================================================
 void ejecutarMinijuegoNivel2() {
-  if (nv2ReiniciarPartida) {
+  if (!enPausa && nv2ReiniciarPartida) {
     iniciarPartidaNivel2();
   }
 
@@ -2501,7 +2502,9 @@ void ejecutarMinijuegoNivel2() {
   }
 
   // --- C.1 BASS BUMP / ZOOM PULSE DE CÁMARA (Sin escalar pgFondoEstaticoNv2 para mantener Blit nativo a 60 FPS) ---
-  nv2ZoomCamara = lerp(nv2ZoomCamara, 1.0f, 0.20f);
+  if (!enPausa) {
+    nv2ZoomCamara = lerp(nv2ZoomCamara, 1.0f, 0.20f);
+  }
 
   // Blit opaco instantáneo de toda la escena base en (0, 0) exacto -> System.arraycopy / Blit nativo de < 0.2 ms
   imageMode(CORNER);
@@ -2510,11 +2513,11 @@ void ejecutarMinijuegoNivel2() {
   }
 
   if (nv2SubEstado == NV2_SUB_JUGANDO) {
-    int audioTimeMs = obtenerTiempoAudioRealMsNv2();
+    int audioTimeMs = enPausa ? ((pausaInicioMs - nv2TiempoInicioMs) + nv2OffsetMs) : obtenerTiempoAudioRealMsNv2();
     int duracionTotalMs = nv2DuracionTotalActivaMs;
 
     // En modo DIFÍCIL (índice 1), expansión progresiva de carriles: 2 -> 3 (a los 22s) -> 4 (a los 50s)
-    if (nv2Dificultad == NV2_DIF_DIFICIL) {
+    if (!enPausa && nv2Dificultad == NV2_DIF_DIFICIL) {
       int carrilesDeseados = (audioTimeMs < 22000) ? 2 : ((audioTimeMs < 50000) ? 3 : 4);
       if (carrilesDeseados != nv2NumCarrilesActivos) {
         configurarGeometriaCarrilesNv2(carrilesDeseados);
@@ -2524,7 +2527,7 @@ void ejecutarMinijuegoNivel2() {
     }
 
     // Transición especial de Nivel Extremo: 100% completado -> Alerta de Mamá -> Clímax Furia
-    if (nv2Dificultad == NV2_DIF_EXTREMO) {
+    if (!enPausa && nv2Dificultad == NV2_DIF_EXTREMO) {
       if (!nv2ExtremoFaseAlerta && !nv2ExtremoFaseMama && audioTimeMs >= duracionTotalMs) {
         nv2ExtremoFaseAlerta = true;
         nv2ExtremoAlertaInicioMs = millis();
@@ -2606,7 +2609,7 @@ void ejecutarMinijuegoNivel2() {
     }
 
     // En modo INJUGABLE ("RUSH E - Sheet Music Boss"), anunciar cada cambio de sección estructural y el "E" del 1:34.2
-    if (nv2Dificultad == NV2_DIF_INJUGABLE) {
+    if (!enPausa && nv2Dificultad == NV2_DIF_INJUGABLE) {
       int secRush = obtenerSeccionRushEPorTiempoNv2(audioTimeMs);
       if (secRush != nv2SeccionCancionActual) {
         nv2SeccionCancionActual = secRush;
@@ -2620,7 +2623,7 @@ void ejecutarMinijuegoNivel2() {
     }
 
     // Si el Bot Auto-Play está activo, juega automáticamente todas las notas del nivel actual
-    if (nv2AutoPlayBot) {
+    if (!enPausa && nv2AutoPlayBot) {
       ejecutarBotAutoPlayNv2(audioTimeMs);
     }
 
@@ -2650,20 +2653,22 @@ void ejecutarMinijuegoNivel2() {
       nv2IndicePrimeraNotaActiva++;
     }
 
-    // Resetear vibraciones de carriles antes de evaluar notas sostenidas activas
-    for (int c = 0; c < nv2NumCarrilesActivos; c++) {
-      nv2VibracionCarril[c] = lerp(nv2VibracionCarril[c], 0.0f, 0.25f);
-    }
+    if (!enPausa) {
+      // Resetear vibraciones de carriles antes de evaluar notas sostenidas activas
+      for (int c = 0; c < nv2NumCarrilesActivos; c++) {
+        nv2VibracionCarril[c] = lerp(nv2VibracionCarril[c], 0.0f, 0.25f);
+      }
 
-    // Pre-chequeo de notas sostenidas que se están manteniendo para hacer vibrar el carril
-    for (int i = nv2IndicePrimeraNotaActiva; i < totalNotasNv2; i++) {
-      if (nv2NotaTiempoMs[i] > audioTimeMs + 300) break;
-      if (nv2NotaEsSostenida[i] && nv2NotaManteniendo[i] && !nv2NotaCompletada[i] && !nv2NotaFallada[i]) {
-        int c = nv2NotaCarril[i];
-        if (c >= 0 && c < nv2NumCarrilesActivos && nv2TeclaCarrilPresionada[c]) {
-          nv2VibracionCarril[c] = random(-7.0f, 7.0f) * escalaX;
-          nv2KeybeamAlfa[c] = max(nv2KeybeamAlfa[c], 150.0f);
-          nv2LatidoLineaCarril[c] = max(nv2LatidoLineaCarril[c], 0.55f);
+      // Pre-chequeo de notas sostenidas que se están manteniendo para hacer vibrar el carril
+      for (int i = nv2IndicePrimeraNotaActiva; i < totalNotasNv2; i++) {
+        if (nv2NotaTiempoMs[i] > audioTimeMs + 300) break;
+        if (nv2NotaEsSostenida[i] && nv2NotaManteniendo[i] && !nv2NotaCompletada[i] && !nv2NotaFallada[i]) {
+          int c = nv2NotaCarril[i];
+          if (c >= 0 && c < nv2NumCarrilesActivos && nv2TeclaCarrilPresionada[c]) {
+            nv2VibracionCarril[c] = random(-7.0f, 7.0f) * escalaX;
+            nv2KeybeamAlfa[c] = max(nv2KeybeamAlfa[c], 150.0f);
+            nv2LatidoLineaCarril[c] = max(nv2LatidoLineaCarril[c], 0.55f);
+          }
         }
       }
     }
@@ -2684,9 +2689,11 @@ void ejecutarMinijuegoNivel2() {
       int gC = (colC >> 8) & 0xFF;
       int bC = colC & 0xFF;
 
-      if (nv2FlashCarril[c] > 0) nv2FlashCarril[c]--;
-      if (nv2TeclaCarrilPresionada[c]) {
-        nv2KeybeamAlfa[c] = max(nv2KeybeamAlfa[c], 110.0f);
+      if (!enPausa) {
+        if (nv2FlashCarril[c] > 0) nv2FlashCarril[c]--;
+        if (nv2TeclaCarrilPresionada[c]) {
+          nv2KeybeamAlfa[c] = max(nv2KeybeamAlfa[c], 110.0f);
+        }
       }
 
       // A.2 Keybeam vertical semitransparente en 3 bandas de gradiente (FillRect nativo ultrarrápido)
@@ -2717,10 +2724,12 @@ void ejecutarMinijuegoNivel2() {
           rect(icx - (wCore >> 1), yHazSup + hTercio, wCore, altoHazTotal - hTercio);
         }
 
-        nv2KeybeamAlfa[c] = lerp(nv2KeybeamAlfa[c], 0.0f, nv2KeybeamEsHit[c] ? 0.20f : 0.28f);
-        if (nv2KeybeamAlfa[c] < 4.0f) {
-          nv2KeybeamAlfa[c] = 0.0f;
-          nv2KeybeamEsHit[c] = false;
+        if (!enPausa) {
+          nv2KeybeamAlfa[c] = lerp(nv2KeybeamAlfa[c], 0.0f, nv2KeybeamEsHit[c] ? 0.20f : 0.28f);
+          if (nv2KeybeamAlfa[c] < 4.0f) {
+            nv2KeybeamAlfa[c] = 0.0f;
+            nv2KeybeamEsHit[c] = false;
+          }
         }
       }
 
@@ -2734,13 +2743,17 @@ void ejecutarMinijuegoNivel2() {
         fill(255, 255, 255, round(245 * lat));
         rect(icx - (wCoreL >> 1), yHazSup, wCoreL, altoHazTotal);
 
-        nv2LatidoLineaCarril[c] = lerp(nv2LatidoLineaCarril[c], 0.0f, 0.24f);
-        if (nv2LatidoLineaCarril[c] < 0.035f) nv2LatidoLineaCarril[c] = 0.0f;
+        if (!enPausa) {
+          nv2LatidoLineaCarril[c] = lerp(nv2LatidoLineaCarril[c], 0.0f, 0.24f);
+          if (nv2LatidoLineaCarril[c] < 0.035f) nv2LatidoLineaCarril[c] = 0.0f;
+        }
       }
 
       // B.1 Squash & Stretch en receptores usando PGraphics pre-escalado a 1.35x (0 costo de reescalado en CPU)
-      nv2ReceptorEscala[c] = lerp(nv2ReceptorEscala[c], 1.0f, 0.24f);
-      if (abs(nv2ReceptorEscala[c] - 1.0f) < 0.01f) nv2ReceptorEscala[c] = 1.0f;
+      if (!enPausa) {
+        nv2ReceptorEscala[c] = lerp(nv2ReceptorEscala[c], 1.0f, 0.24f);
+        if (abs(nv2ReceptorEscala[c] - 1.0f) < 0.01f) nv2ReceptorEscala[c] = 1.0f;
+      }
 
       if (nv2FlashCarril[c] > 0 || nv2TeclaCarrilPresionada[c] || nv2ReceptorEscala[c] > 1.015f) {
         PGraphics pgRec = (nv2ReceptorEscala[c] >= 1.15f && pgReceptorPopCacheNv2[c] != null)
@@ -2772,7 +2785,7 @@ void ejecutarMinijuegoNivel2() {
       int tFin = notaHitTimeMs + nv2NotaDuracionMs[i];
 
       // Verificar si la nota ya pasó sin ser impactada (MISS -> Baja barra de vida del plato)
-      if (!nv2NotaImpactada[i] && audioTimeMs > notaHitTimeMs + nv2VentanaBuenoMs) {
+      if (!enPausa && !nv2NotaImpactada[i] && audioTimeMs > notaHitTimeMs + nv2VentanaBuenoMs) {
         nv2NotaFallada[i] = true;
         nv2ConteoFallo++;
         nv2ComboActual = 0;
@@ -2786,7 +2799,7 @@ void ejecutarMinijuegoNivel2() {
       }
 
       // Manejo de notas sostenidas que están siendo mantenidas: vibración + chispas continuas
-      if (nv2NotaEsSostenida[i] && nv2NotaManteniendo[i]) {
+      if (!enPausa && nv2NotaEsSostenida[i] && nv2NotaManteniendo[i]) {
         float cx = nv2CarrilBaseX[c] * escalaX + nv2VibracionCarril[c];
         if (nv2TeclaCarrilPresionada[c]) {
           if (frameCount % 6 == 0) {
@@ -2876,7 +2889,7 @@ void ejecutarMinijuegoNivel2() {
             rect(icxN - (wTrail2 >> 1), iyN - round(radioNota * 0.6f) - hTrail1 - hTrail2, wTrail2, hTrail2);
 
             // Máximo 1 chispa desprendida cada 5 frames en total para no saturar el pool de partículas
-            if (!chispaEstelaEsteFrame && (frameCount % (velocidadX2Activa ? 4 : 8) == 0) && yDib < receptorY - 30 * escalaY) {
+            if (!enPausa && !chispaEstelaEsteFrame && (frameCount % (velocidadX2Activa ? 4 : 8) == 0) && yDib < receptorY - 30 * escalaY) {
               generarChispaEstelaNotaNv2(cx, yDib - radioNota * 0.5f, col, velocidadX2Activa);
               chispaEstelaEsteFrame = true;
             }
@@ -2896,11 +2909,14 @@ void ejecutarMinijuegoNivel2() {
 
     // Si estamos en la pausa de 6-7 segundos de alerta de Mamá, dibujar el cartel dramático de peligro
     if (nv2Dificultad == NV2_DIF_EXTREMO && nv2ExtremoFaseAlerta) {
-      dibujarAlertaMamaNv2(millis() - nv2ExtremoAlertaInicioMs);
+      dibujarAlertaMamaNv2((enPausa ? pausaInicioMs : millis()) - nv2ExtremoAlertaInicioMs);
     }
 
     // --- 5. Elementos Dinámicos del HUD Superior (con Barra de Progreso Sobrecargada) ---
     dibujarHUDNivel2(audioTimeMs, duracionTotalMs);
+    if (!enPausa && !nv2ExtremoFaseAlerta && nv2SubEstado == NV2_SUB_JUGANDO) {
+      dibujarClipBailando(audioTimeMs, periodoVisualBeatNv2());
+    }
 
     // =========================================================================
     // VERIFICAR FIN DE LA CANCIÓN:
@@ -2934,7 +2950,7 @@ void ejecutarMinijuegoNivel2() {
       }
     }
 
-    if (audioTermino) {
+    if (!enPausa && !enTransicion && audioTermino) {
       finalizarPartidaNivel2();
     }
   } else { if (nv2SubEstado == NV2_SUB_DERROTA) {
@@ -2963,12 +2979,17 @@ void generarChispaEstelaNotaNv2(float cx, float cy, int col, boolean modoRapido)
 // =========================================================================
 // A.1 & C.3 HIGHWAY REACTIVO Y ESCENARIO VIVO ULTRARRÁPIDO (100% FillRect -> 60 FPS)
 // =========================================================================
-void dibujarEscenarioVivoYHighwayNv2(int tiempoActualMs, float anchoCarril, float receptorY) {
+int periodoVisualBeatNv2() {
   int bpmAct = (nv2Dificultad == NV2_DIF_EXTREMO && nv2ExtremoFaseMama)
     ? nv2BpmFaseMama
     : nv2BpmPorDif[constrain(nv2Dificultad, 0, TOTAL_DIFICULTADES_NV2 - 1)];
   int periodoBeat = max(200, round(60000.0f / float(max(60, bpmAct))));
   if (nv2Dificultad == NV2_DIF_EXTREMO && nv2ExtremoFaseMama) periodoBeat = max(170, periodoBeat / 2);
+  return periodoBeat;
+}
+
+void dibujarEscenarioVivoYHighwayNv2(int tiempoActualMs, float anchoCarril, float receptorY) {
+  int periodoBeat = periodoVisualBeatNv2();
   float faseBeat = (tiempoActualMs % periodoBeat) / float(periodoBeat);
   float pulsoBeat = (1.0f - faseBeat) * (1.0f - faseBeat);
 
@@ -3854,6 +3875,7 @@ void finalizarPartidaNivel2() {
   int totalIntentos = max(1, nv2ConteoPerfecto + nv2ConteoBueno + nv2ConteoFallo);
   float puntosPrec = nv2ConteoPerfecto * 1.0f + nv2ConteoBueno * 0.65f;
   nv2PrecisionFinal = constrain((puntosPrec / float(totalIntentos)) * 100.0f, 0.0f, 100.0f);
+  reaccionClipAlResultado(nv2PrecisionFinal >= 60.0f);
 
   if (nv2PrecisionFinal >= 85.0f) {
     nv2CategoriaResultado = "ESTRELLA MICHELIN";

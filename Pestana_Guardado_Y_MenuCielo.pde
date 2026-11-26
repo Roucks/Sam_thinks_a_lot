@@ -12,7 +12,7 @@ String ARCHIVO_PARTIDAS = "data/partidas_guardadas.txt";
 // Si mas adelante agregamos el capitulo final de la historia, solo metemos
 // el numero de estado y el nombre aca y el guardado sigue funcionando solo xd
 // =========================================================================
-int totalEscenasCatalogo = 14;
+int totalEscenasCatalogo = 16;
 int[] catalogoEscenaId = {
   2,   // JUEGO (Intro cumpleanos)
   4,   // EXPLORACION (Casa de Sam)
@@ -27,7 +27,9 @@ int[] catalogoEscenaId = {
   14,  // NOVELA_COCINA (Historia en la cocina)
   15,  // SELECCION_DIF_NV2 (Selector de receta/dificultad)
   11,  // NIVEL2_INTRO (Intro nivel 2)
-  12   // NIVEL2 (Minijuego cocina al ritmo)
+  12,  // NIVEL2 (Minijuego cocina al ritmo)
+  21,  // HISTORIA_POST_COCINA (Consecuencia despues de cocinar)
+  18   // HISTORIA3_ARCADE (Nivel 3: cuarto y arcade)
 };
 
 String[] catalogoEscenaNombre = {
@@ -44,13 +46,15 @@ String[] catalogoEscenaNombre = {
   "Cap. 2: Tarde en la Cocina",
   "Preparando la Receta",
   "Antes de Cocinar",
-  "Nivel 2: Cocina al Ritmo"
+  "Nivel 2: Cocina al Ritmo",
+  "Cap. 2: Después de Cocinar",
+  "Cap. 3: El Arcade"
 };
 
 // =========================================================================
 // 2. ARREGLOS PARALELOS DE LAS PARTIDAS GUARDADAS
 // =========================================================================
-final int MAX_SLOTS_PARTIDA = 2;
+final int MAX_SLOTS_PARTIDA = 3;
 boolean[] slotPartidaOcupado = new boolean[MAX_SLOTS_PARTIDA];
 String[] slotNombreJugador = new String[MAX_SLOTS_PARTIDA];
 int[] slotEstadoEscena = new int[MAX_SLOTS_PARTIDA];
@@ -60,12 +64,15 @@ int[] slotBienestarGuardado = new int[MAX_SLOTS_PARTIDA];
 int[] slotReputacionGuardada = new int[MAX_SLOTS_PARTIDA];
 String[] slotLogroDestacado = new String[MAX_SLOTS_PARTIDA];
 String[] slotBanderasExtra = new String[MAX_SLOTS_PARTIDA];
+int slotPartidaActiva = 0;
+boolean[] logrosPartidaActual = new boolean[21];
 
 boolean sistemaGuardadoInicializado = false;
 
 // modal sencillo para ponerle nombre a la partida nueva y para confirmar si quiere borrar xd
 boolean escribiendoNombrePartida = false;
 boolean confirmandoBorrarPartida = false;
+int slotConfirmandoBorrar = -1;
 String nombreTemporalPartida = "Sam";
 
 // =========================================================================
@@ -80,18 +87,18 @@ int ultimoReinicioVideo = 0;
 
 // =========================================================================
 // 4. ARREGLOS PARALELOS DE LOS RECUADROS FLOTANTES EN EL CIELO
-// Indice 0: Recuadro Partida Guardada
-// Indice 1: Recuadro '+' Nueva Partida
-// Indice 2: Boton Volver al Menu Principal
+// Indices 0..MAX_SLOTS_PARTIDA-1: Partidas guardadas
+// Indice MAX_SLOTS_PARTIDA (3): Recuadro '+' Nueva Partida
+// Indice MAX_SLOTS_PARTIDA + 1 (4): Boton Volver al Menu Principal
 // =========================================================================
-final int TOTAL_CARDS_CIELO = 3;
-float[] cardCieloX = new float[TOTAL_CARDS_CIELO];
-float[] cardCieloY = new float[TOTAL_CARDS_CIELO];
-float[] cardCieloW = new float[TOTAL_CARDS_CIELO];
-float[] cardCieloH = new float[TOTAL_CARDS_CIELO];
-float[] cardCieloEscala = { 1.0f, 1.0f, 1.0f };
-float[] cardCieloHoverLerp = { 0.0f, 0.0f, 0.0f };
-float[] cardCieloFaseSin = { 0.0f, 1.85f, 3.40f };
+final int MAX_CARDS_CIELO = 5;
+float[] cardCieloX = new float[MAX_CARDS_CIELO];
+float[] cardCieloY = new float[MAX_CARDS_CIELO];
+float[] cardCieloW = new float[MAX_CARDS_CIELO];
+float[] cardCieloH = new float[MAX_CARDS_CIELO];
+float[] cardCieloEscala = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+float[] cardCieloHoverLerp = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+float[] cardCieloFaseSin = { 0.0f, 1.35f, 2.70f, 1.85f, 3.40f };
 int cardCieloSeleccionada = -1;
 int ultimaCardCieloHover = -1;
 
@@ -104,8 +111,8 @@ PGraphics pgFondoCieloCache = null;
 boolean fondoCieloCacheListo = false;
 
 PGraphics pgCartelTituloCielo = null;
-PGraphics pgCardGuardadaNormal = null;
-PGraphics pgCardGuardadaHover = null;
+PGraphics[] pgCardGuardadaNormalSlot = new PGraphics[MAX_SLOTS_PARTIDA];
+PGraphics[] pgCardGuardadaHoverSlot = new PGraphics[MAX_SLOTS_PARTIDA];
 PGraphics pgCardNuevaNormal = null;
 PGraphics pgCardNuevaHover = null;
 PGraphics pgBtnVolverNormal = null;
@@ -114,12 +121,12 @@ PGraphics pgBtnBorrarNormal = null;
 PGraphics pgBtnBorrarHover = null;
 PGraphics pgAvisoEliminada = null;
 boolean cacheTarjetasCieloListo = false;
-boolean ultimoEstadoHayPartidaCache = false;
+int ultimoConteoPartidasCache = -1;
 
-boolean hoverBtnBorrarPartida = false;
-boolean ultimoHoverBtnBorrar = false;
-float btnBorrarX = 0;
-float btnBorrarY = 0;
+int slotHoverBorrar = -1;
+int ultimoSlotHoverBorrar = -1;
+float[] btnBorrarSlotX = new float[MAX_SLOTS_PARTIDA];
+float[] btnBorrarSlotY = new float[MAX_SLOTS_PARTIDA];
 float btnBorrarW = 0;
 float btnBorrarH = 0;
 int tiempoAvisoPartidaEliminada = -10000;
@@ -129,22 +136,173 @@ int tiempoAvisoPartidaEliminada = -10000;
 // FUNCIONES DE INICIALIZACION Y ARCHIVOS PLANOS (saveStrings / loadStrings)
 // =========================================================================
 
-void inicializarSistemaGuardadoYCielo() {
-  // inicializamos los arreglos paralelos por defecto para evitar nulls xd
-  for (int i = 0; i < MAX_SLOTS_PARTIDA; i++) {
-    slotPartidaOcupado[i] = false;
-    slotNombreJugador[i] = "Sam";
-    slotEstadoEscena[i] = JUEGO;
-    slotSubProgreso[i] = 0;
-    slotPuntajeGuardado[i] = 0;
-    slotBienestarGuardado[i] = 100;
-    slotReputacionGuardada[i] = 15;
-    slotLogroDestacado[i] = "Bienestar: 100% | Logros: 0/" + totalLogros;
-    slotBanderasExtra[i] = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,000000000";
+String crearBitsLogrosCero() {
+  String bits = "";
+  for (int i = 0; i < totalLogros; i++) {
+    bits = bits + "0";
   }
+  return bits;
+}
 
-  cargarPartidasDesdeArchivo();
-  sistemaGuardadoInicializado = true;
+String obtenerBitsLogrosDeSlot(int slotIdx) {
+  String res = crearBitsLogrosCero();
+  if (slotIdx >= 0 && slotIdx < MAX_SLOTS_PARTIDA && slotBanderasExtra[slotIdx] != null) {
+    String[] ext = split(slotBanderasExtra[slotIdx], ',');
+    if (ext != null && contarCadenas(ext) >= 19) {
+      String bits = ext[18];
+      String armado = "";
+      for (int i = 0; i < totalLogros; i++) {
+        if (i < bits.length() && leerCaracter(bits, i) == '1') {
+          armado = armado + "1";
+        } else {
+          armado = armado + "0";
+        }
+      }
+      res = armado;
+    }
+  }
+  return res;
+}
+
+int contarLogrosDeSlot(int slotIdx) {
+  int cant = 0;
+  String bits = obtenerBitsLogrosDeSlot(slotIdx);
+  for (int i = 0; i < totalLogros && i < bits.length(); i++) {
+    if (leerCaracter(bits, i) == '1') {
+      cant++;
+    }
+  }
+  return cant;
+}
+
+int contarLogrosPartidaActual() {
+  int cant = 0;
+  for (int i = 0; i < totalLogros; i++) {
+    if (logrosPartidaActual[i]) {
+      cant++;
+    }
+  }
+  return cant;
+}
+
+int contarPartidasOcupadas() {
+  int cant = 0;
+  for (int i = 0; i < MAX_SLOTS_PARTIDA; i++) {
+    if (slotPartidaOcupado[i]) {
+      cant++;
+    }
+  }
+  return cant;
+}
+
+int obtenerPrimerSlotLibre() {
+  int res = -1;
+  boolean encontrado = false;
+  for (int i = 0; i < MAX_SLOTS_PARTIDA && !encontrado; i++) {
+    if (!slotPartidaOcupado[i]) {
+      res = i;
+      encontrado = true;
+    }
+  }
+  return res;
+}
+
+int obtenerPrimerSlotOcupado() {
+  int res = -1;
+  boolean encontrado = false;
+  for (int i = 0; i < MAX_SLOTS_PARTIDA && !encontrado; i++) {
+    if (slotPartidaOcupado[i]) {
+      res = i;
+      encontrado = true;
+    }
+  }
+  return res;
+}
+
+// Recalcula la union general de logros a partir de todas las partidas guardadas existentes.
+void recalcularLogrosReunidos() {
+  for (int i = 0; i < totalLogros; i++) {
+    logrosDesbloqueados[i] = false;
+  }
+  for (int s = 0; s < MAX_SLOTS_PARTIDA; s++) {
+    if (slotPartidaOcupado[s]) {
+      String bits = obtenerBitsLogrosDeSlot(s);
+      for (int i = 0; i < totalLogros && i < bits.length(); i++) {
+        if (leerCaracter(bits, i) == '1') {
+          logrosDesbloqueados[i] = true;
+        }
+      }
+    }
+  }
+}
+
+void sincronizarLogrosEnSlotActivo() {
+  int target = -1;
+  if (slotPartidaActiva >= 0 && slotPartidaActiva < MAX_SLOTS_PARTIDA && slotPartidaOcupado[slotPartidaActiva]) {
+    target = slotPartidaActiva;
+  } else {
+    target = obtenerPrimerSlotOcupado();
+  }
+  if (target >= 0 && slotBanderasExtra[target] != null) {
+    String[] ext = split(slotBanderasExtra[target], ',');
+    if (ext != null && contarCadenas(ext) >= 19) {
+      String bitsPrev = ext[18];
+      String bitsNuevos = "";
+      for (int i = 0; i < totalLogros; i++) {
+        boolean tiene = logrosPartidaActual[i];
+        if (!tiene && i < bitsPrev.length() && leerCaracter(bitsPrev, i) == '1') {
+          tiene = true;
+        }
+        bitsNuevos = bitsNuevos + (tiene ? "1" : "0");
+      }
+      ext[18] = bitsNuevos;
+      String reconstruida = ext[0];
+      for (int j = 1; j < 19; j++) {
+        reconstruida = reconstruida + "," + ext[j];
+      }
+      slotBanderasExtra[target] = reconstruida;
+      int cantSlot = contarLogrosDeSlot(target);
+      int bienSlot = constrain(slotBienestarGuardado[target], 0, 100);
+      slotLogroDestacado[target] = "Bienestar: " + bienSlot + "%  |  Logros: " + cantSlot + "/" + totalLogros;
+      cacheTarjetasCieloListo = false;
+      escribirArreglosEnTxt();
+    }
+  }
+}
+
+void inicializarSistemaGuardadoYCielo() {
+  if (!sistemaGuardadoInicializado) {
+    String ceros = crearBitsLogrosCero();
+    for (int i = 0; i < MAX_SLOTS_PARTIDA; i++) {
+      slotPartidaOcupado[i] = false;
+      slotNombreJugador[i] = "Sam";
+      slotEstadoEscena[i] = JUEGO;
+      slotSubProgreso[i] = 0;
+      slotPuntajeGuardado[i] = 0;
+      slotBienestarGuardado[i] = 100;
+      slotReputacionGuardada[i] = 15;
+      slotLogroDestacado[i] = "Bienestar: 100% | Logros: 0/" + totalLogros;
+      slotBanderasExtra[i] = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0," + ceros;
+    }
+    for (int l = 0; l < totalLogros; l++) {
+      logrosPartidaActual[l] = false;
+    }
+
+    cargarPartidasDesdeArchivo();
+    int primeroOcup = obtenerPrimerSlotOcupado();
+    if (primeroOcup >= 0) {
+      slotPartidaActiva = primeroOcup;
+      String bitsAct = obtenerBitsLogrosDeSlot(slotPartidaActiva);
+      for (int l = 0; l < totalLogros && l < bitsAct.length(); l++) {
+        logrosPartidaActual[l] = (leerCaracter(bitsAct, l) == '1');
+      }
+    } else {
+      slotPartidaActiva = 0;
+    }
+    recalcularLogrosReunidos();
+    guardarLogrosGlobales();
+    sistemaGuardadoInicializado = true;
+  }
 }
 
 // busca el nombre de la escena en el catalogo paralelo para que sea escalable
@@ -179,7 +337,7 @@ int contarLogrosDesbloqueadosActuales() {
   return cant;
 }
 
-// guarda los datos actuales de la partida en el slot 0 y escribe el archivo .txt
+// guarda los datos actuales de la partida en el slot activo y escribe el archivo .txt
 void guardarPartidaEnArchivo(int estadoParaGuardar) {
   if (!feriaActiva) {
 
@@ -187,9 +345,15 @@ void guardarPartidaEnArchivo(int estadoParaGuardar) {
     inicializarSistemaGuardadoYCielo();
   }
 
+  int sIdx = slotPartidaActiva;
+  if (sIdx < 0 || sIdx >= MAX_SLOTS_PARTIDA) {
+    sIdx = 0;
+    slotPartidaActiva = 0;
+  }
+
   // si se guarda desde el celular o algo intermedio, aseguramos un estado valido
   int estReal = estadoParaGuardar;
-  if (estReal == CARGA || estReal == MENU || estReal == CREDITOS || estReal == LOGROS) {
+  if (estReal == CARGA || estReal == MENU || estReal == CREDITOS || estReal == LOGROS || estReal == RECUERDOS) {
     estReal = EXPLORACION;
   }
 
@@ -212,6 +376,14 @@ void guardarPartidaEnArchivo(int estadoParaGuardar) {
           } else {
             if (estReal == NOVELA_COCINA) {
               subProg = paginaCocina;
+            } else {
+              if (estReal == HISTORIA_POST_COCINA) {
+                subProg = (hcBuena ? 100 : 0) + (hcEtapa * 20) + hcPagina;
+              } else {
+                if (estReal == HISTORIA3_ARCADE) {
+                  subProg = t3Etapa;
+                }
+              }
             }
           }
         }
@@ -219,28 +391,28 @@ void guardarPartidaEnArchivo(int estadoParaGuardar) {
     }
   }
 
-  slotPartidaOcupado[0] = true;
+  slotPartidaOcupado[sIdx] = true;
   if (playerName != null && playerName.trim().length() > 0) {
-    slotNombreJugador[0] = playerName.trim();
+    slotNombreJugador[sIdx] = playerName.trim();
   } else {
-    if (slotNombreJugador[0] == null || slotNombreJugador[0].trim().length() == 0) {
-      slotNombreJugador[0] = "Sam";
+    if (slotNombreJugador[sIdx] == null || slotNombreJugador[sIdx].trim().length() == 0) {
+      slotNombreJugador[sIdx] = "Sam";
     }
   }
 
-  slotEstadoEscena[0] = estReal;
-  slotSubProgreso[0] = subProg;
-  slotPuntajeGuardado[0] = puntosJugador;
-  slotBienestarGuardado[0] = round(constrain(bienestarDigital, 0, 100));
-  slotReputacionGuardada[0] = reputacionDigital;
+  slotEstadoEscena[sIdx] = estReal;
+  slotSubProgreso[sIdx] = subProg;
+  slotPuntajeGuardado[sIdx] = puntosJugador;
+  slotBienestarGuardado[sIdx] = round(constrain(bienestarDigital, 0, 100));
+  slotReputacionGuardada[sIdx] = reputacionDigital;
 
-  int cantLogros = contarLogrosDesbloqueadosActuales();
-  slotLogroDestacado[0] = "Bienestar: " + slotBienestarGuardado[0] + "%  |  Logros: " + cantLogros + "/" + totalLogros;
+  int cantLogros = contarLogrosPartidaActual();
+  slotLogroDestacado[sIdx] = "Bienestar: " + slotBienestarGuardado[sIdx] + "%  |  Logros: " + cantLogros + "/" + totalLogros;
 
-  // armamos la cadena de banderas de historia para que al cargar todo siga igualito
+  // armamos la cadena de banderas de historia usando unicamente los logros propios de esta partida
   String bitsLogros = "";
   for (int i = 0; i < totalLogros; i++) {
-    if (logrosDesbloqueados[i]) {
+    if (logrosPartidaActual[i]) {
       bitsLogros = bitsLogros + "1";
     } else {
       bitsLogros = bitsLogros + "0";
@@ -267,15 +439,17 @@ void guardarPartidaEnArchivo(int estadoParaGuardar) {
                + ptsCatLogros + ","
                + bitsLogros;
 
-  slotBanderasExtra[0] = extra;
+  slotBanderasExtra[sIdx] = extra;
   cacheTarjetasCieloListo = false;
 
   escribirArreglosEnTxt();
+  recalcularLogrosReunidos();
+  guardarLogrosGlobales();
 
   }
 }
 
-// limpia todos los datos del slot en los arreglos paralelos y actualiza el archivo .txt
+// limpia todos los datos del slot en los arreglos paralelos, actualiza el .txt y recalcula los logros reunidos
 void borrarPartidaGuardada(int slotIdx) {
   if (slotIdx >= 0 && slotIdx < MAX_SLOTS_PARTIDA) {
     slotPartidaOcupado[slotIdx] = false;
@@ -286,12 +460,27 @@ void borrarPartidaGuardada(int slotIdx) {
     slotBienestarGuardado[slotIdx] = 100;
     slotReputacionGuardada[slotIdx] = 15;
     slotLogroDestacado[slotIdx] = "Bienestar: 100% | Logros: 0/" + totalLogros;
-    slotBanderasExtra[slotIdx] = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,000000000";
+    slotBanderasExtra[slotIdx] = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0," + crearBitsLogrosCero();
 
     escribirArreglosEnTxt();
 
-    hoverBtnBorrarPartida = false;
-    ultimoHoverBtnBorrar = false;
+    if (slotIdx == slotPartidaActiva) {
+      for (int i = 0; i < totalLogros; i++) {
+        logrosPartidaActual[i] = false;
+      }
+      puntosJugador = 0;
+      puntosMostradosLerp = 0;
+      int otroOcup = obtenerPrimerSlotOcupado();
+      slotPartidaActiva = (otroOcup >= 0) ? otroOcup : 0;
+    }
+
+    recalcularLogrosReunidos();
+    guardarLogrosGlobales();
+    recValidarPreferenciasContraLogros();
+
+    slotHoverBorrar = -1;
+    ultimoSlotHoverBorrar = -1;
+    slotConfirmandoBorrar = -1;
     confirmandoBorrarPartida = false;
     cardCieloSeleccionada = -1;
     cacheTarjetasCieloListo = false;
@@ -334,6 +523,18 @@ void cargarPartidasDesdeArchivo() {
     if (f.exists()) {
       String[] lineas = loadStrings("partidas_guardadas.txt");
       if (lineas != null && contarCadenas(lineas) > 0) {
+        String ceros = crearBitsLogrosCero();
+        for (int k = 0; k < MAX_SLOTS_PARTIDA; k++) {
+          slotPartidaOcupado[k] = false;
+          slotNombreJugador[k] = "Sam";
+          slotEstadoEscena[k] = JUEGO;
+          slotSubProgreso[k] = 0;
+          slotPuntajeGuardado[k] = 0;
+          slotBienestarGuardado[k] = 100;
+          slotReputacionGuardada[k] = 15;
+          slotLogroDestacado[k] = "Bienestar: 100% | Logros: 0/" + totalLogros;
+          slotBanderasExtra[k] = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0," + ceros;
+        }
         int slotIdx = 0;
         for (int i = 0; i < contarCadenas(lineas); i++) {
           String lin = trim(lineas[i]);
@@ -355,17 +556,21 @@ void cargarPartidasDesdeArchivo() {
         }
       }
     }
+    recalcularLogrosReunidos();
     cacheTarjetasCieloListo = false;
   } catch (Exception e) {
     println("No se pudo leer partidas_guardadas.txt (se creara uno nuevo): " + e.getMessage());
   }
 }
 
-// restaura en el juego todas las variables guardadas en el slot 0
+// restaura en el juego todas las variables guardadas en el slot elegido
 void aplicarPartidaCargadaAlJuego(int slotIdx) {
   if (slotIdx >= 0 && slotIdx < MAX_SLOTS_PARTIDA) {
     if (slotPartidaOcupado[slotIdx]) {
+      slotPartidaActiva = slotIdx;
       detenerMediosParaSaltoDebug();
+      t3Reiniciar();
+      reiniciarHistoriaDespuesCocina();
       inicializarChatsDia1();
       mostrandoModalDormir = false;
       dialogoCamaActivo = false;
@@ -379,6 +584,10 @@ void aplicarPartidaCargadaAlJuego(int slotIdx) {
       bienestarVisualLerp = bienestarDigital;
       reputacionDigital = slotReputacionGuardada[slotIdx];
       reputacionVisualLerp = reputacionDigital;
+
+      for (int l = 0; l < totalLogros; l++) {
+        logrosPartidaActual[l] = false;
+      }
 
       // restauramos las banderas de progreso desde el arreglo paralelo
       String[] ext = split(slotBanderasExtra[slotIdx], ',');
@@ -404,11 +613,11 @@ void aplicarPartidaCargadaAlJuego(int slotIdx) {
 
         String bitsLog = ext[18];
         for (int l = 0; l < totalLogros && l < bitsLog.length(); l++) {
-          logrosDesbloqueados[l] = (leerCaracter(bitsLog, l) == '1');
+          logrosPartidaActual[l] = (leerCaracter(bitsLog, l) == '1');
         }
-        cargarLogrosGlobales();
-        guardarLogrosGlobales();
       }
+      recalcularLogrosReunidos();
+      guardarLogrosGlobales();
 
       int escenaDestino = slotEstadoEscena[slotIdx];
       int subProg = slotSubProgreso[slotIdx];
@@ -473,22 +682,57 @@ void aplicarPartidaCargadaAlJuego(int slotIdx) {
 
       faseCamaraMenu = 0;
       progresoCamaraCielo = 0.0f;
-      estadoDestino = escenaDestino;
-      enTransicion = true;
+
+      if (escenaDestino == HISTORIA_POST_COCINA) {
+        boolean eraBuena = (subProg >= 100);
+        int resto = subProg % 100;
+        int etapaGuardada = constrain(resto / 20, 0, 2);
+        int pagGuardada = max(0, resto % 20);
+        hcSaltarDebug(eraBuena);
+        hcEtapa = etapaGuardada;
+        if (hcEtapa >= 1) {
+          hcPrepararPublicacion();
+        }
+        hcPagina = constrain(pagGuardada, 0, max(0, hcTotalPaginas() - 1));
+        hcReiniciarTexto();
+      } else {
+        if (escenaDestino == HISTORIA3_ARCADE) {
+          if (subProg == 4) {
+            t3AbrirJuegoArcade();
+            nv3_prepararMenu();
+          } else {
+            t3EmpezarCuarto();
+            if (subProg == 1 || subProg == 3 || subProg == 5) {
+              t3CambiarEscena(subProg);
+            }
+          }
+        } else {
+          estadoDestino = escenaDestino;
+          enTransicion = true;
+        }
+      }
     }
   }
 }
 
-// reinicia las variables para empezar una partida desde cero y la guarda en el archivo
+// reinicia las variables para empezar una partida desde cero y la guarda en el primer slot libre
 void iniciarNuevaPartidaDesdeCielo(String nombreElegido) {
   String nomFinal = trim(nombreElegido);
   if (nomFinal.length() == 0) {
     nomFinal = "Sam";
   }
 
+  int destino = obtenerPrimerSlotLibre();
+  if (destino < 0) {
+    destino = 0;
+  }
+  slotPartidaActiva = destino;
+
   playerName = nomFinal;
-  slotNombreJugador[0] = nomFinal;
+  slotNombreJugador[slotPartidaActiva] = nomFinal;
   detenerMediosParaSaltoDebug();
+  t3Reiniciar();
+  reiniciarHistoriaDespuesCocina();
   mostrandoModalDormir = false;
   dialogoCamaActivo = false;
   leyendoMensaje = false;
@@ -509,6 +753,10 @@ void iniciarNuevaPartidaDesdeCielo(String nombreElegido) {
   desayunoLlamado = false;
   desayunoTarde = false;
   cantTeclasDir = 0;
+
+  for (int i = 0; i < totalLogros; i++) {
+    logrosPartidaActual[i] = false;
+  }
 
   // reseteamos el progreso de la historia para empezar limpio
   puntosJugador = 0;
@@ -553,7 +801,7 @@ void iniciarNuevaPartidaDesdeCielo(String nombreElegido) {
   dialogoCompletado = false;
   inicializarChatsDia1();
 
-  // guardamos el estado inicial en el archivo .txt
+  // guardamos el estado inicial en el archivo .txt (con 0 logros propios)
   guardarPartidaEnArchivo(JUEGO);
 
   escribiendoNombrePartida = false;
@@ -643,38 +891,19 @@ void dibujarVideoFondoConCamaraCielo() {
             if (pgFondoCieloCache == null || pgFondoCieloCache.width != width || pgFondoCieloCache.height != height) {
               pgFondoCieloCache = createGraphics(width, height);
             }
-            float vw = videoFondo.width;
-            float vh = videoFondo.height;
-            float cropW = vw * 0.45f;
-            float cropH = vh * 0.45f;
-            int sx1 = int((vw - cropW) * 0.88f);
-            int sy1 = int((vh - cropH) * 0.06f);
-            int sx2 = int(sx1 + cropW);
-            int sy2 = int(sy1 + cropH);
-
             pgFondoCieloCache.beginDraw();
             pgFondoCieloCache.noSmooth();
             pgFondoCieloCache.noTint();
             pgFondoCieloCache.imageMode(CORNER);
-            pgFondoCieloCache.image(videoFondo, 0, 0, width, height, sx1, sy1, sx2, sy2);
+            dibujarRecorteCielo(pgFondoCieloCache, 1);
             pgFondoCieloCache.endDraw();
             fondoCieloCacheListo = true;
           }
           image(pgFondoCieloCache, 0, 0);
         } else {
           // durante el paneo de 0.5s desactivamos el filtro bicubico de JAVA2D para que escale instantaneo
-          float vw = videoFondo.width;
-          float vh = videoFondo.height;
-          float cropW = lerp(vw, vw * 0.45f, curva);
-          float cropH = lerp(vh, vh * 0.45f, curva);
-
-          int sx1 = int((vw - cropW) * 0.88f);
-          int sy1 = int((vh - cropH) * 0.06f);
-          int sx2 = int(sx1 + cropW);
-          int sy2 = int(sy1 + cropH);
-
           noSmooth();
-          image(videoFondo, 0, 0, width, height, sx1, sy1, sx2, sy2);
+          dibujarRecorteCielo(g, curva);
           smooth(2);
         }
       }
@@ -686,21 +915,84 @@ void dibujarVideoFondoConCamaraCielo() {
   }
 }
 
+// El menú y la carga comparten el encuadre del cielo del video.
+void dibujarRecorteCielo(PGraphics destino, float curva) {
+  float vw = videoFondo.width;
+  float vh = videoFondo.height;
+  float cropW = lerp(vw, vw * 0.45f, curva);
+  float cropH = lerp(vh, vh * 0.45f, curva);
+  int sx = int((vw - cropW) * 0.88f);
+  int sy = int((vh - cropH) * 0.06f);
+  destino.image(videoFondo, 0, 0, destino.width, destino.height, sx, sy,
+    int(sx + cropW), int(sy + cropH));
+}
+
+void actualizarLayoutCardsCielo() {
+  int cantOcup = contarPartidasOcupadas();
+  boolean mostrarNueva = (cantOcup < MAX_SLOTS_PARTIDA);
+  int[] filaIdx = new int[MAX_SLOTS_PARTIDA + 1];
+  int totalFila = 0;
+
+  for (int s = 0; s < MAX_SLOTS_PARTIDA; s++) {
+    if (slotPartidaOcupado[s]) {
+      filaIdx[totalFila] = s;
+      totalFila++;
+    }
+  }
+  if (mostrarNueva) {
+    filaIdx[totalFila] = MAX_SLOTS_PARTIDA;
+    totalFila++;
+  }
+
+  if (totalFila == 1) {
+    int c0 = filaIdx[0];
+    cardCieloW[c0] = 360 * escalaX;
+    cardCieloH[c0] = 350 * escalaY;
+    cardCieloX[c0] = width * 0.50f;
+    cardCieloY[c0] = height * 0.47f;
+  } else {
+    if (totalFila == 2) {
+      int c0 = filaIdx[0];
+      int c1 = filaIdx[1];
+      float w0 = 450 * escalaX;
+      float w1 = (c1 == MAX_SLOTS_PARTIDA) ? (330 * escalaX) : (450 * escalaX);
+      float gap = 70 * escalaX;
+      float startX = (width - (w0 + gap + w1)) * 0.5f;
+      cardCieloW[c0] = w0;
+      cardCieloH[c0] = 360 * escalaY;
+      cardCieloX[c0] = startX + w0 * 0.5f;
+      cardCieloY[c0] = height * 0.47f;
+      cardCieloW[c1] = w1;
+      cardCieloH[c1] = 360 * escalaY;
+      cardCieloX[c1] = startX + w0 + gap + w1 * 0.5f;
+      cardCieloY[c1] = height * 0.47f;
+    } else {
+      float wCard = 410 * escalaX;
+      float hCard = 360 * escalaY;
+      float gap = 38 * escalaX;
+      float totalW = (wCard * totalFila) + (gap * max(0, totalFila - 1));
+      float startX = (width - totalW) * 0.5f;
+      for (int k = 0; k < totalFila; k++) {
+        int ci = filaIdx[k];
+        cardCieloW[ci] = wCard;
+        cardCieloH[ci] = hCard;
+        cardCieloX[ci] = startX + (wCard * 0.5f) + k * (wCard + gap);
+        cardCieloY[ci] = height * 0.47f;
+      }
+    }
+  }
+
+  cardCieloW[MAX_SLOTS_PARTIDA + 1] = 280 * escalaX;
+  cardCieloH[MAX_SLOTS_PARTIDA + 1] = 58 * escalaY;
+  cardCieloX[MAX_SLOTS_PARTIDA + 1] = width * 0.50f;
+  cardCieloY[MAX_SLOTS_PARTIDA + 1] = height * 0.86f;
+}
+
 // pre-renderiza todas las tarjetas en objetos PGraphics una sola vez para no dibujar rect() ni text() en cada frame
 void construirCacheTarjetasCielo() {
-  boolean hayPartida = slotPartidaOcupado[0];
-
-  cardCieloW[0] = 470 * escalaX;
-  cardCieloH[0] = 360 * escalaY;
-  if (!hayPartida) {
-    cardCieloW[1] = 360 * escalaX;
-    cardCieloH[1] = 350 * escalaY;
-  } else {
-    cardCieloW[1] = 320 * escalaX;
-    cardCieloH[1] = 360 * escalaY;
-  }
-  cardCieloW[2] = 280 * escalaX;
-  cardCieloH[2] = 58 * escalaY;
+  int cantOcup = contarPartidasOcupadas();
+  boolean hayPartida = (cantOcup > 0);
+  actualizarLayoutCardsCielo();
 
   // 1. Pre-renderizar cartel de titulo superior
   int titW = max(20, int(470 * escalaX));
@@ -720,19 +1012,29 @@ void construirCacheTarjetasCielo() {
   pgCartelTituloCielo.text("SELECCIÓN DE PARTIDA", 4 + titW / 2.0f, 4 + titH / 2.0f);
   pgCartelTituloCielo.endDraw();
 
-  // 2. Pre-renderizar tarjeta de Partida Guardada (Normal y Hover)
-  if (hayPartida) {
-    pgCardGuardadaNormal = crearPGCardGuardada(cardCieloW[0], cardCieloH[0], false);
-    pgCardGuardadaHover = crearPGCardGuardada(cardCieloW[0] * 1.045f, cardCieloH[0] * 1.045f, true);
+  // 2. Pre-renderizar tarjetas de Partidas Guardadas (Normal y Hover)
+  for (int s = 0; s < MAX_SLOTS_PARTIDA; s++) {
+    if (slotPartidaOcupado[s]) {
+      pgCardGuardadaNormalSlot[s] = crearPGCardGuardada(s, cardCieloW[s], cardCieloH[s], false);
+      pgCardGuardadaHoverSlot[s] = crearPGCardGuardada(s, cardCieloW[s] * 1.045f, cardCieloH[s] * 1.045f, true);
+    } else {
+      pgCardGuardadaNormalSlot[s] = null;
+      pgCardGuardadaHoverSlot[s] = null;
+    }
   }
 
-  // 3. Pre-renderizar tarjeta '+' Nueva Partida (Normal y Hover)
-  pgCardNuevaNormal = crearPGCardNueva(cardCieloW[1], cardCieloH[1], false, hayPartida);
-  pgCardNuevaHover = crearPGCardNueva(cardCieloW[1] * 1.045f, cardCieloH[1] * 1.045f, true, hayPartida);
+  // 3. Pre-renderizar tarjeta '+' Nueva Partida (Normal y Hover) si hay espacio disponible
+  if (cantOcup < MAX_SLOTS_PARTIDA) {
+    pgCardNuevaNormal = crearPGCardNueva(cardCieloW[MAX_SLOTS_PARTIDA], cardCieloH[MAX_SLOTS_PARTIDA], false, hayPartida);
+    pgCardNuevaHover = crearPGCardNueva(cardCieloW[MAX_SLOTS_PARTIDA] * 1.045f, cardCieloH[MAX_SLOTS_PARTIDA] * 1.045f, true, hayPartida);
+  } else {
+    pgCardNuevaNormal = null;
+    pgCardNuevaHover = null;
+  }
 
   // 4. Pre-renderizar boton Volver al Menu (Normal y Hover)
-  pgBtnVolverNormal = crearPGBtnVolver(cardCieloW[2], cardCieloH[2], false);
-  pgBtnVolverHover = crearPGBtnVolver(cardCieloW[2] * 1.045f, cardCieloH[2] * 1.045f, true);
+  pgBtnVolverNormal = crearPGBtnVolver(cardCieloW[MAX_SLOTS_PARTIDA + 1], cardCieloH[MAX_SLOTS_PARTIDA + 1], false);
+  pgBtnVolverHover = crearPGBtnVolver(cardCieloW[MAX_SLOTS_PARTIDA + 1] * 1.045f, cardCieloH[MAX_SLOTS_PARTIDA + 1] * 1.045f, true);
 
   // 5. Pre-renderizar boton de Borrar Partida (papelera estilizada Normal y Hover terracota)
   btnBorrarW = 42 * escalaX;
@@ -765,7 +1067,7 @@ void construirCacheTarjetasCielo() {
   pgAvisoEliminada.text("Partida eliminada", 4 + avW / 2.0f, 4 + avH / 2.0f);
   pgAvisoEliminada.endDraw();
 
-  ultimoEstadoHayPartidaCache = hayPartida;
+  ultimoConteoPartidasCache = cantOcup;
   cacheTarjetasCieloListo = true;
 }
 
@@ -789,7 +1091,7 @@ void dibujarCajaMaderaEnPG(PGraphics pg, float x, float y, float w, float h, boo
   pg.rect(x + 4, y + 4, w - 8, min(h * 0.42f, 38 * escalaY), 4);
 }
 
-PGraphics crearPGCardGuardada(float wF, float hF, boolean esHover) {
+PGraphics crearPGCardGuardada(int slotIdx, float wF, float hF, boolean esHover) {
   int w = max(20, int(wF));
   int h = max(20, int(hF));
   float factorEsc = esHover ? 1.045f : 1.0f;
@@ -820,7 +1122,7 @@ PGraphics crearPGCardGuardada(float wF, float hF, boolean esHover) {
   }
   pg.rect(x + 5, y + 5, w - 10, 46 * escalaY * factorEsc, 6);
 
-  float pad = 20 * escalaX * factorEsc;
+  float pad = 18 * escalaX * factorEsc;
   float innerX = x + pad;
   float innerY = y + 58 * escalaY * factorEsc;
   float innerW = w - (pad * 2.0f);
@@ -832,35 +1134,35 @@ PGraphics crearPGCardGuardada(float wF, float hF, boolean esHover) {
   pg.rect(innerX, innerY, innerW, innerH, 8);
 
   pg.textAlign(CENTER, CENTER);
-  pg.textSize(max(12, int(21 * escalaX * factorEsc)));
+  pg.textSize(max(12, int(20 * escalaX * factorEsc)));
   pg.fill(80, 35, 10);
   pg.text("PARTIDA GUARDADA", x + w / 2.0f + 1.5f, y + 29 * escalaY * factorEsc + 1.5f);
   pg.fill(255, 248, 220);
   pg.text("PARTIDA GUARDADA", x + w / 2.0f, y + 29 * escalaY * factorEsc);
 
   pg.textAlign(LEFT, TOP);
-  pg.textSize(max(12, int(23 * escalaX * factorEsc)));
+  pg.textSize(max(12, int(22 * escalaX * factorEsc)));
   pg.fill(255, 225, 110);
-  pg.text("Jugador: " + slotNombreJugador[0], innerX + 18 * escalaX * factorEsc, innerY + 14 * escalaY * factorEsc);
+  pg.text("Jugador: " + slotNombreJugador[slotIdx], innerX + 16 * escalaX * factorEsc, innerY + 14 * escalaY * factorEsc);
 
-  String nomEscena = obtenerNombreEscenaCatalogo(slotEstadoEscena[0], slotSubProgreso[0]);
-  pg.textSize(max(11, int(17 * escalaX * factorEsc)));
+  String nomEscena = obtenerNombreEscenaCatalogo(slotEstadoEscena[slotIdx], slotSubProgreso[slotIdx]);
+  pg.textSize(max(10, int(15.5f * escalaX * factorEsc)));
   pg.fill(255);
-  pg.text("Progreso: " + nomEscena, innerX + 18 * escalaX * factorEsc, innerY + 52 * escalaY * factorEsc);
+  pg.text("Progreso: " + nomEscena, innerX + 16 * escalaX * factorEsc, innerY + 52 * escalaY * factorEsc);
 
-  pg.textSize(max(11, int(18 * escalaX * factorEsc)));
+  pg.textSize(max(11, int(17.5f * escalaX * factorEsc)));
   pg.fill(150, 245, 165);
-  pg.text("Puntaje Total: " + slotPuntajeGuardado[0] + " pts", innerX + 18 * escalaX * factorEsc, innerY + 86 * escalaY * factorEsc);
+  pg.text("Puntaje Total: " + slotPuntajeGuardado[slotIdx] + " pts", innerX + 16 * escalaX * factorEsc, innerY + 86 * escalaY * factorEsc);
 
-  int cantLogros = contarLogrosDesbloqueadosActuales();
-  int bienGuardado = constrain(slotBienestarGuardado[0], 0, 100);
-  pg.textSize(max(10, int(15 * escalaX * factorEsc)));
+  int cantLogros = contarLogrosDeSlot(slotIdx);
+  int bienGuardado = constrain(slotBienestarGuardado[slotIdx], 0, 100);
+  pg.textSize(max(10, int(14.5f * escalaX * factorEsc)));
   pg.fill(245, 230, 200);
-  pg.text("Bienestar Digital: " + bienGuardado + "%   |   Logros: " + cantLogros + "/" + totalLogros, innerX + 18 * escalaX * factorEsc, innerY + 122 * escalaY * factorEsc);
+  pg.text("Bienestar Digital: " + bienGuardado + "%   |   Logros: " + cantLogros + "/" + totalLogros, innerX + 16 * escalaX * factorEsc, innerY + 122 * escalaY * factorEsc);
 
-  float bx = innerX + 18 * escalaX * factorEsc;
+  float bx = innerX + 16 * escalaX * factorEsc;
   float by = innerY + 152 * escalaY * factorEsc;
-  float bw = innerW - 36 * escalaX * factorEsc;
+  float bw = innerW - 32 * escalaX * factorEsc;
   float bh = 16 * escalaY * factorEsc;
 
   pg.fill(60, 30, 12);
@@ -881,15 +1183,15 @@ PGraphics crearPGCardGuardada(float wF, float hF, boolean esHover) {
   pg.rect(bx + 2, by + 2, max(0, (bw - 4) * (bienGuardado / 100.0f)), bh - 4, 4);
 
   pg.textAlign(CENTER, CENTER);
-  pg.textSize(max(11, int(18 * escalaX * factorEsc)));
+  pg.textSize(max(11, int(17 * escalaX * factorEsc)));
   if (esHover) {
     pg.fill(50, 20, 0);
-    pg.text("» CLIC PARA CONTINUAR PARTIDA «", x + w / 2.0f, y + h - 28 * escalaY * factorEsc);
+    pg.text("» CLIC PARA CONTINUAR «", x + w / 2.0f, y + h - 28 * escalaY * factorEsc);
   } else {
     pg.fill(90, 42, 15);
-    pg.text("CLIC PARA CONTINUAR PARTIDA", x + w / 2.0f + 1.5f, y + h - 28 * escalaY * factorEsc + 1.5f);
+    pg.text("CLIC PARA CONTINUAR", x + w / 2.0f + 1.5f, y + h - 28 * escalaY * factorEsc + 1.5f);
     pg.fill(255, 250, 230);
-    pg.text("CLIC PARA CONTINUAR PARTIDA", x + w / 2.0f, y + h - 28 * escalaY * factorEsc);
+    pg.text("CLIC PARA CONTINUAR", x + w / 2.0f, y + h - 28 * escalaY * factorEsc);
   }
 
   pg.endDraw();
@@ -963,7 +1265,7 @@ PGraphics crearPGCardNueva(float wF, float hF, boolean esHover, boolean hayParti
 
   pg.rectMode(CORNER);
   pg.textAlign(CENTER, CENTER);
-  pg.textSize(max(12, int(22 * escalaX * factorEsc)));
+  pg.textSize(max(12, int(21 * escalaX * factorEsc)));
   if (esHover) {
     pg.fill(50, 20, 0);
     pg.text("+ NUEVA PARTIDA", mcx, y + h - 58 * escalaY * factorEsc);
@@ -1085,9 +1387,11 @@ PGraphics crearPGBtnBorrar(float wF, float hF, boolean esHover) {
 void dibujarMenuPartidasEnElCielo() {
   float curva = obtenerCurvaSuaveCielo();
   if (curva >= 0.25f) {
-    boolean hayPartida = slotPartidaOcupado[0];
-    if (!cacheTarjetasCieloListo || ultimoEstadoHayPartidaCache != hayPartida) {
+    int cantOcup = contarPartidasOcupadas();
+    if (!cacheTarjetasCieloListo || ultimoConteoPartidasCache != cantOcup) {
       construirCacheTarjetasCielo();
+    } else {
+      actualizarLayoutCardsCielo();
     }
 
     float progEntrada = constrain(map(curva, 0.25f, 0.94f, 0.0f, 1.0f), 0.0f, 1.0f);
@@ -1105,41 +1409,41 @@ void dibujarMenuPartidasEnElCielo() {
       image(pgCartelTituloCielo, titX, titY);
     }
 
-    // 2. Posiciones centrales de las tarjetas
-    if (!hayPartida) {
-      cardCieloX[1] = width * 0.50f;
-      cardCieloY[1] = height * 0.47f;
-    } else {
-      cardCieloX[0] = width * 0.35f;
-      cardCieloY[0] = height * 0.47f;
-      cardCieloX[1] = width * 0.71f;
-      cardCieloY[1] = height * 0.47f;
+    // 2. Posicion de botones de borrado por slot ocupado
+    for (int s = 0; s < MAX_SLOTS_PARTIDA; s++) {
+      if (slotPartidaOcupado[s]) {
+        float flotYS = sin(tiempoOnda + cardCieloFaseSin[s]) * (7.5f * escalaY);
+        btnBorrarSlotX[s] = cardCieloX[s] + (cardCieloW[s] / 2.0f) - (34 * escalaX);
+        btnBorrarSlotY[s] = cardCieloY[s] + flotYS + offsetDeslizarCielo - (cardCieloH[s] / 2.0f) + (29 * escalaY);
+      }
     }
-    cardCieloX[2] = width * 0.50f;
-    cardCieloY[2] = height * 0.86f;
 
-    // 3. Deteccion de hover (con prioridad para el boton de borrar partida si existe)
+    // 3. Deteccion de hover (prioridad a los botones de borrar partida)
     int hoverDetectado = -1;
-    hoverBtnBorrarPartida = false;
-
-    if (hayPartida) {
-      float flotY0 = sin(tiempoOnda + cardCieloFaseSin[0]) * (7.5f * escalaY);
-      btnBorrarX = cardCieloX[0] + (cardCieloW[0] / 2.0f) - (34 * escalaX);
-      btnBorrarY = cardCieloY[0] + flotY0 + offsetDeslizarCielo - (cardCieloH[0] / 2.0f) + (29 * escalaY);
-    }
+    slotHoverBorrar = -1;
 
     if (faseCamaraMenu == 2 && !escribiendoNombrePartida && !confirmandoBorrarPartida && !mostrarOpciones) {
-      if (hayPartida && mouseX >= btnBorrarX - btnBorrarW / 2.0f && mouseX <= btnBorrarX + btnBorrarW / 2.0f && mouseY >= btnBorrarY - btnBorrarH / 2.0f && mouseY <= btnBorrarY + btnBorrarH / 2.0f) {
-        hoverBtnBorrarPartida = true;
-      } else {
-        for (int i = 0; i < TOTAL_CARDS_CIELO; i++) {
-          boolean evaluarEstaCard = true;
-          if (i == 0 && !hayPartida) {
-            evaluarEstaCard = false;
+      for (int s = 0; s < MAX_SLOTS_PARTIDA && slotHoverBorrar == -1; s++) {
+        if (slotPartidaOcupado[s] && mouseX >= btnBorrarSlotX[s] - btnBorrarW / 2.0f && mouseX <= btnBorrarSlotX[s] + btnBorrarW / 2.0f
+            && mouseY >= btnBorrarSlotY[s] - btnBorrarH / 2.0f && mouseY <= btnBorrarSlotY[s] + btnBorrarH / 2.0f) {
+          slotHoverBorrar = s;
+        }
+      }
+      if (slotHoverBorrar == -1) {
+        for (int i = 0; i < MAX_CARDS_CIELO; i++) {
+          boolean evaluarEstaCard = false;
+          if (i < MAX_SLOTS_PARTIDA) {
+            evaluarEstaCard = slotPartidaOcupado[i];
+          } else {
+            if (i == MAX_SLOTS_PARTIDA) {
+              evaluarEstaCard = (cantOcup < MAX_SLOTS_PARTIDA);
+            } else {
+              evaluarEstaCard = true;
+            }
           }
 
           if (evaluarEstaCard) {
-            float ampFlot = (i == 2) ? (6.0f * escalaY) : (7.5f * escalaY);
+            float ampFlot = (i == MAX_SLOTS_PARTIDA + 1) ? (6.0f * escalaY) : (7.5f * escalaY);
             float flotY = sin(tiempoOnda + cardCieloFaseSin[i]) * ampFlot;
             float cx = cardCieloX[i];
             float cy = cardCieloY[i] + flotY;
@@ -1154,13 +1458,13 @@ void dibujarMenuPartidasEnElCielo() {
       }
     }
 
-    if (hoverBtnBorrarPartida && !ultimoHoverBtnBorrar) {
+    if (slotHoverBorrar != -1 && slotHoverBorrar != ultimoSlotHoverBorrar) {
       if (sonidoHover != null) {
         sonidoHover.amp(0.15f * volMaster);
         sonidoHover.play();
       }
     }
-    ultimoHoverBtnBorrar = hoverBtnBorrarPartida;
+    ultimoSlotHoverBorrar = slotHoverBorrar;
 
     if (hoverDetectado != -1 && hoverDetectado != ultimaCardCieloHover) {
       if (sonidoHover != null) {
@@ -1175,39 +1479,45 @@ void dibujarMenuPartidasEnElCielo() {
     }
     cardCieloSeleccionada = hoverDetectado;
 
-    // 4. Dibujar PGraphics de Partida Guardada y su boton de Borrar en la esquina superior derecha (blit 1:1 directo)
-    if (hayPartida) {
-      PGraphics pg0 = (cardCieloSeleccionada == 0) ? pgCardGuardadaHover : pgCardGuardadaNormal;
-      if (pg0 != null) {
-        float flotY0 = sin(tiempoOnda + cardCieloFaseSin[0]) * (7.5f * escalaY);
-        int x0 = int(cardCieloX[0] - pg0.width / 2.0f);
-        int y0 = int(cardCieloY[0] + flotY0 + offsetDeslizarCielo - pg0.height / 2.0f);
-        image(pg0, x0, y0);
-      }
+    // 4. Dibujar PGraphics de Partidas Guardadas ocupadas y sus botones de Borrar
+    for (int s = 0; s < MAX_SLOTS_PARTIDA; s++) {
+      if (slotPartidaOcupado[s]) {
+        PGraphics pgS = (cardCieloSeleccionada == s) ? pgCardGuardadaHoverSlot[s] : pgCardGuardadaNormalSlot[s];
+        if (pgS != null) {
+          float flotYS = sin(tiempoOnda + cardCieloFaseSin[s]) * (7.5f * escalaY);
+          int xs = int(cardCieloX[s] - pgS.width / 2.0f);
+          int ys = int(cardCieloY[s] + flotYS + offsetDeslizarCielo - pgS.height / 2.0f);
+          image(pgS, xs, ys);
+        }
 
-      PGraphics pgB = hoverBtnBorrarPartida ? pgBtnBorrarHover : pgBtnBorrarNormal;
-      if (pgB != null) {
-        int xb = int(btnBorrarX - pgB.width / 2.0f);
-        int yb = int(btnBorrarY - pgB.height / 2.0f);
-        image(pgB, xb, yb);
+        PGraphics pgB = (slotHoverBorrar == s) ? pgBtnBorrarHover : pgBtnBorrarNormal;
+        if (pgB != null) {
+          int xb = int(btnBorrarSlotX[s] - pgB.width / 2.0f);
+          int yb = int(btnBorrarSlotY[s] - pgB.height / 2.0f);
+          image(pgB, xb, yb);
+        }
       }
     }
 
-    // 5. Dibujar PGraphics de '+' Nueva Partida (blit 1:1 directo)
-    PGraphics pg1 = (cardCieloSeleccionada == 1) ? pgCardNuevaHover : pgCardNuevaNormal;
-    if (pg1 != null) {
-      float flotY1 = sin(tiempoOnda + cardCieloFaseSin[1]) * (7.5f * escalaY);
-      int x1 = int(cardCieloX[1] - pg1.width / 2.0f);
-      int y1 = int(cardCieloY[1] + flotY1 + offsetDeslizarCielo - pg1.height / 2.0f);
-      image(pg1, x1, y1);
+    // 5. Dibujar PGraphics de '+' Nueva Partida si hay espacio
+    if (cantOcup < MAX_SLOTS_PARTIDA) {
+      int idxNueva = MAX_SLOTS_PARTIDA;
+      PGraphics pg1 = (cardCieloSeleccionada == idxNueva) ? pgCardNuevaHover : pgCardNuevaNormal;
+      if (pg1 != null) {
+        float flotY1 = sin(tiempoOnda + cardCieloFaseSin[idxNueva]) * (7.5f * escalaY);
+        int x1 = int(cardCieloX[idxNueva] - pg1.width / 2.0f);
+        int y1 = int(cardCieloY[idxNueva] + flotY1 + offsetDeslizarCielo - pg1.height / 2.0f);
+        image(pg1, x1, y1);
+      }
     }
 
     // 6. Dibujar PGraphics de Boton Volver (blit 1:1 directo)
-    PGraphics pg2 = (cardCieloSeleccionada == 2) ? pgBtnVolverHover : pgBtnVolverNormal;
+    int idxVolver = MAX_SLOTS_PARTIDA + 1;
+    PGraphics pg2 = (cardCieloSeleccionada == idxVolver) ? pgBtnVolverHover : pgBtnVolverNormal;
     if (pg2 != null) {
-      float flotY2 = sin(tiempoOnda + cardCieloFaseSin[2]) * (6.0f * escalaY);
-      int x2 = int(cardCieloX[2] - pg2.width / 2.0f);
-      int y2 = int(cardCieloY[2] + flotY2 - (offsetDeslizarCielo * 0.45f) - pg2.height / 2.0f);
+      float flotY2 = sin(tiempoOnda + cardCieloFaseSin[idxVolver]) * (6.0f * escalaY);
+      int x2 = int(cardCieloX[idxVolver] - pg2.width / 2.0f);
+      int y2 = int(cardCieloY[idxVolver] + flotY2 - (offsetDeslizarCielo * 0.45f) - pg2.height / 2.0f);
       image(pg2, x2, y2);
     }
 
@@ -1326,6 +1636,8 @@ void dibujarModalNombreNuevaPartida() {
 void dibujarModalConfirmarBorradoPartida() {
   rectMode(CORNER);
 
+  int idxModal = (slotConfirmandoBorrar >= 0 && slotConfirmandoBorrar < MAX_SLOTS_PARTIDA) ? slotConfirmandoBorrar : 0;
+
   float mw = 520 * escalaX;
   float mh = 265 * escalaY;
   float mx = (width - mw) / 2.0f;
@@ -1353,11 +1665,11 @@ void dibujarModalConfirmarBorradoPartida() {
 
   textSize(max(11, int(17 * escalaX)));
   fill(255, 245, 220);
-  text("¿Seguro que deseas borrar la partida de \"" + slotNombreJugador[0] + "\"?", mx + mw / 2.0f, inY + 32 * escalaY);
+  text("¿Seguro que deseas borrar la partida de \"" + slotNombreJugador[idxModal] + "\"?", mx + mw / 2.0f, inY + 32 * escalaY);
 
   textSize(max(10, int(14 * escalaX)));
   fill(255, 195, 165);
-  text("Se perderá el progreso guardado y no se podrá deshacer.", mx + mw / 2.0f, inY + 64 * escalaY);
+  text("Se perderá su progreso y los logros propios de esta partida.", mx + mw / 2.0f, inY + 64 * escalaY);
 
   // botones de "SI, ELIMINAR" (terracota) y "NO, CANCELAR" (madera/dorado)
   float bW = 200 * escalaX;
@@ -1444,7 +1756,11 @@ boolean procesarClicMenuCielo() {
             sonidoClic.amp(0.5f * volMaster);
             sonidoClic.play();
           }
-          borrarPartidaGuardada(0);
+          if (slotConfirmandoBorrar >= 0 && slotConfirmandoBorrar < MAX_SLOTS_PARTIDA) {
+            borrarPartidaGuardada(slotConfirmandoBorrar);
+          } else {
+            confirmandoBorrarPartida = false;
+          }
         } else {
           // clic en "NO, CANCELAR"
           if (mouseX >= b2X && mouseX <= b2X + bW && mouseY >= bY && mouseY <= bY + bH) {
@@ -1453,6 +1769,7 @@ boolean procesarClicMenuCielo() {
               sonidoClic.play();
             }
             confirmandoBorrarPartida = false;
+            slotConfirmandoBorrar = -1;
           }
         }
       } else {
@@ -1484,14 +1801,22 @@ boolean procesarClicMenuCielo() {
             }
           }
         } else {
-          // prioridad: clic en el boton de borrar partida (abre la ventana de confirmacion antes de borrar)
-          if (slotPartidaOcupado[0] && (hoverBtnBorrarPartida || (mouseX >= btnBorrarX - btnBorrarW / 2.0f && mouseX <= btnBorrarX + btnBorrarW / 2.0f && mouseY >= btnBorrarY - btnBorrarH / 2.0f && mouseY <= btnBorrarY + btnBorrarH / 2.0f))) {
+          // prioridad: clic en el boton de borrar partida de cualquier slot ocupado
+          int slotClicBorrar = slotHoverBorrar;
+          for (int s = 0; s < MAX_SLOTS_PARTIDA && slotClicBorrar == -1; s++) {
+            if (slotPartidaOcupado[s] && mouseX >= btnBorrarSlotX[s] - btnBorrarW / 2.0f && mouseX <= btnBorrarSlotX[s] + btnBorrarW / 2.0f
+                && mouseY >= btnBorrarSlotY[s] - btnBorrarH / 2.0f && mouseY <= btnBorrarSlotY[s] + btnBorrarH / 2.0f) {
+              slotClicBorrar = s;
+            }
+          }
+          if (slotClicBorrar != -1 && slotPartidaOcupado[slotClicBorrar]) {
             if (sonidoClic != null) {
               sonidoClic.amp(0.5f * volMaster);
               sonidoClic.play();
             }
+            slotConfirmandoBorrar = slotClicBorrar;
             confirmandoBorrarPartida = true;
-            hoverBtnBorrarPartida = false;
+            slotHoverBorrar = -1;
           } else {
             // clic sobre las tarjetas flotantes en el cielo
             if (cardCieloSeleccionada != -1) {
@@ -1500,16 +1825,16 @@ boolean procesarClicMenuCielo() {
                 sonidoClic.play();
               }
 
-              if (cardCieloSeleccionada == 0 && slotPartidaOcupado[0]) {
-                // cargar la partida guardada del archivo
-                aplicarPartidaCargadaAlJuego(0);
+              if (cardCieloSeleccionada >= 0 && cardCieloSeleccionada < MAX_SLOTS_PARTIDA && slotPartidaOcupado[cardCieloSeleccionada]) {
+                // cargar la partida guardada del slot elegido
+                aplicarPartidaCargadaAlJuego(cardCieloSeleccionada);
               } else {
-                if (cardCieloSeleccionada == 1) {
-                  // abrir el cuadrito para crear nueva partida (o iniciar)
+                if (cardCieloSeleccionada == MAX_SLOTS_PARTIDA && contarPartidasOcupadas() < MAX_SLOTS_PARTIDA) {
+                  // abrir el cuadrito para crear nueva partida
                   nombreTemporalPartida = "Sam";
                   escribiendoNombrePartida = true;
                 } else {
-                  if (cardCieloSeleccionada == 2) {
+                  if (cardCieloSeleccionada == MAX_SLOTS_PARTIDA + 1) {
                     // volver al menu principal haciendo la transicion inversa bajando de las nubes
                     faseCamaraMenu = 3;
                   }
@@ -1534,13 +1859,18 @@ boolean procesarTeclaMenuCielo(char k, int kCode, boolean botonAtras) {
     if (confirmandoBorrarPartida) {
       if (kCode == ESC || k == 'n' || k == 'N' || k == 'm' || k == 'M') {
         confirmandoBorrarPartida = false;
+        slotConfirmandoBorrar = -1;
       } else {
         if (kCode == ENTER || k == RETURN) {
           if (sonidoClic != null) {
             sonidoClic.amp(0.5f * volMaster);
             sonidoClic.play();
           }
-          borrarPartidaGuardada(0);
+          if (slotConfirmandoBorrar >= 0 && slotConfirmandoBorrar < MAX_SLOTS_PARTIDA) {
+            borrarPartidaGuardada(slotConfirmandoBorrar);
+          } else {
+            confirmandoBorrarPartida = false;
+          }
         }
       }
     } else {
@@ -1581,11 +1911,25 @@ boolean procesarTeclaMenuCielo(char k, int kCode, boolean botonAtras) {
               sonidoClic.amp(0.5f * volMaster);
               sonidoClic.play();
             }
-            if (slotPartidaOcupado[0]) {
-              aplicarPartidaCargadaAlJuego(0);
+            if (cardCieloSeleccionada >= 0 && cardCieloSeleccionada < MAX_SLOTS_PARTIDA && slotPartidaOcupado[cardCieloSeleccionada]) {
+              aplicarPartidaCargadaAlJuego(cardCieloSeleccionada);
             } else {
-              nombreTemporalPartida = "Sam";
-              escribiendoNombrePartida = true;
+              if (cardCieloSeleccionada == MAX_SLOTS_PARTIDA && contarPartidasOcupadas() < MAX_SLOTS_PARTIDA) {
+                nombreTemporalPartida = "Sam";
+                escribiendoNombrePartida = true;
+              } else {
+                if (cardCieloSeleccionada == MAX_SLOTS_PARTIDA + 1) {
+                  faseCamaraMenu = 3;
+                } else {
+                  int priOcup = obtenerPrimerSlotOcupado();
+                  if (priOcup >= 0) {
+                    aplicarPartidaCargadaAlJuego(priOcup);
+                  } else {
+                    nombreTemporalPartida = "Sam";
+                    escribiendoNombrePartida = true;
+                  }
+                }
+              }
             }
           }
         }

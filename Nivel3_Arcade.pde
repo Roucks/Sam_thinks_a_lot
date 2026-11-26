@@ -112,7 +112,7 @@ int nv3_decision = 0;
 int nv3_reloj = 0;
 int nv3_tiempoFase = 0;
 
-int nv3_esperaBarril = 125;
+int nv3_esperaBarril = 143;
 int nv3_numeroBarriles = 0;
 
 final int nv3_LIMITE_TIEMPO = 4500;
@@ -154,11 +154,10 @@ float nv3_anteriorX = 0;
 float nv3_anteriorY = 0;
 
 float nv3_gravedad = 0.68;
-float nv3_impulso = 6.8;
+float nv3_impulso = 7.5;
 float nv3_rapidez = 2.4;
-float nv3_velocidadAire = 2.4;
+final float nv3_CONTROL_AIRE = 0.55;
 
-int nv3_direccionSalto = 0;
 int nv3_suelo = -1;
 int nv3_escalera = -1;
 int nv3_saltos = 0;
@@ -468,7 +467,7 @@ String[][] nv3_consejos = {
   },
   {
     "21 huecos de 38px. Salta cerca del borde.",
-    "El salto conserva su direccion. Mira los generadores."
+    "Puedes ajustar el salto en el aire. Mira los generadores."
   }
 };
 
@@ -686,37 +685,44 @@ void nv3_actualizarMusicaSegunEstado() {
   if (nv3_musicaSala != null) nv3_musicaSala.amp(0.45f * volMaster);
   if (nv3_musicaJuego != null) nv3_musicaJuego.amp(0.50f * volMaster);
   if (nv3_musicaVictoria != null) nv3_musicaVictoria.amp(0.50f * volMaster);
-  int deseada = 1;
 
-  if (nv3_estadoMenu < 0) {
-    if (nv3_pantalla == 2 || nv3_pantalla == 3) {
-      deseada = 2;
+  if (enPausa) {
+    if (nv3_musicaSala != null && nv3_musicaSala.isPlaying()) nv3_musicaSala.pause();
+    if (nv3_musicaJuego != null && nv3_musicaJuego.isPlaying()) nv3_musicaJuego.pause();
+    if (nv3_musicaVictoria != null && nv3_musicaVictoria.isPlaying()) nv3_musicaVictoria.pause();
+  } else {
+    int deseada = 1;
+
+    if (nv3_estadoMenu < 0) {
+      if (nv3_pantalla == 2 || nv3_pantalla == 3) {
+        deseada = 2;
+      }
+      if (nv3_pantalla == 4) {
+        deseada = 0;
+      }
+      if (nv3_pantalla >= 5) {
+        deseada = 3;
+      }
     }
-    if (nv3_pantalla == 4) {
-      deseada = 0;
-    }
-    if (nv3_pantalla >= 5) {
-      deseada = 3;
+
+    nv3_cambiarMusica(deseada);
+
+    if (nv3_estadoMenu < 0 && nv3_pantalla == 2 && nv3_pausa) {
+      if (nv3_musicaJuego != null && nv3_musicaJuego.isPlaying()) {
+        nv3_musicaJuego.pause();
+      }
+    } else {
+      if (nv3_pistaActual == 1 && nv3_musicaSala != null && !nv3_musicaSala.isPlaying()) {
+        nv3_musicaSala.loop();
+      }
+      if (nv3_pistaActual == 2 && nv3_musicaJuego != null && !nv3_musicaJuego.isPlaying()) {
+        nv3_musicaJuego.loop();
+      }
+      if (nv3_pistaActual == 3 && nv3_musicaVictoria != null && !nv3_musicaVictoria.isPlaying()) {
+        nv3_musicaVictoria.loop();
+      }
     }
   }
-
-  if (nv3_estadoMenu < 0 && nv3_pantalla == 2 && nv3_pausa) {
-    if (nv3_musicaJuego != null && nv3_musicaJuego.isPlaying()) {
-      nv3_musicaJuego.pause();
-    }
-  }
-
-  if (nv3_estadoMenu < 0 && nv3_pantalla == 2 && !nv3_pausa) {
-    if (
-      nv3_pistaActual == 2 &&
-      nv3_musicaJuego != null &&
-      !nv3_musicaJuego.isPlaying()
-    ) {
-      nv3_musicaJuego.loop();
-    }
-  }
-
-  nv3_cambiarMusica(deseada);
 }
 
 // ============================================================
@@ -777,7 +783,9 @@ void nv3_draw() {
 
     if (nv3_imagenLista) {
       if (nv3_estadoMenu == 0) {
-        nv3_actualizarBoton();
+        if (!enPausa) {
+          nv3_actualizarBoton();
+        }
         nv3_dibujarResplandor();
         nv3_dibujarVideoPantalla();
         nv3_dibujarMaquina();
@@ -786,7 +794,9 @@ void nv3_draw() {
       }
 
       if (nv3_estadoMenu == 1) {
-        nv3_actualizarZoom();
+        if (!enPausa) {
+          nv3_actualizarZoom();
+        }
 
         if (nv3_estadoMenu == 1) {
           nv3_dibujarVideoPantalla();
@@ -802,28 +812,31 @@ void nv3_draw() {
   }
 
   if (nv3_estadoMenu < 0) {
+    int pantallaDibujadaArcade = nv3_pantalla;
     textFont(nv3_fuenteJuego);
 
-    nv3_avanzarTiempo(constrain(ahora - nv3_ultimoTiempo, 0, 100));
+    if (!enPausa) {
+      nv3_avanzarTiempo(constrain(ahora - nv3_ultimoTiempo, 0, 100));
+    }
     nv3_ultimoTiempo = ahora;
 
     background(13, 15, 32);
 
-    if (nv3_pantalla == 0) nv3_dibujarHistoria(false);
-    if (nv3_pantalla == 1) nv3_dibujarSeleccion();
+    if (pantallaDibujadaArcade == 0) nv3_dibujarHistoria(false);
+    if (pantallaDibujadaArcade == 1) nv3_dibujarSeleccion();
 
-    if (nv3_pantalla == 2) {
+    if (pantallaDibujadaArcade == 2) {
       nv3_dibujarJuego();
-      if (nv3_pausa) nv3_dibujarPausa();
+      if (nv3_pausa && !enPausa) nv3_dibujarPausa();
     }
 
-    if (nv3_pantalla == 3) nv3_dibujarTransicion();
-    if (nv3_pantalla == 4) nv3_dibujarDerrota();
-    if (nv3_pantalla == 5) nv3_dibujarHistoria(true);
-    if (nv3_pantalla == 6) nv3_dibujarFoto();
-    if (nv3_pantalla == 7) nv3_dibujarCierre();
+    if (pantallaDibujadaArcade == 3) nv3_dibujarTransicion();
+    if (pantallaDibujadaArcade == 4) nv3_dibujarDerrota();
+    if (pantallaDibujadaArcade == 5) nv3_dibujarHistoria(true);
+    if (pantallaDibujadaArcade == 6) nv3_dibujarFoto();
+    if (pantallaDibujadaArcade == 7) nv3_dibujarCierre();
 
-    if (nv3_pantalla >= 1 && nv3_pantalla <= 4) {
+    if (pantallaDibujadaArcade >= 1 && pantallaDibujadaArcade <= 4) {
       nv3_dibujarEfectoCRT();
     }
   }
@@ -1931,7 +1944,7 @@ void nv3_iniciarFase() {
   nv3_tiempoFase = 0;
   nv3_tiempoRestante = nv3_LIMITE_TIEMPO;
 
-  nv3_esperaBarril = 140 - nv3_fase * 15;
+  nv3_esperaBarril = nv3_intervaloBarriles();
   nv3_numeroBarriles = 0;
 
   nv3_bonoFichas = false;
@@ -1996,8 +2009,7 @@ void nv3_reaparecer() {
   nv3_bufferSalto = 0;
   nv3_aturdimiento = 0;
 
-  nv3_velocidadAire = nv3_rapidez;
-  nv3_direccionSalto = 0;
+  nv3_mirada = 1;
 
   nv3_agarre = 0;
   nv3_bloqueoAgarre = 0;
@@ -2258,6 +2270,7 @@ void nv3_actualizarJuego() {
       nv3_limpiarControles();
 
       nv3_pantalla = 3;
+      reaccionClipAlResultado(true);
 
       if (nv3_fase == TAM_NV3_MAPAS) {
         nv3_pantalla = 5;
@@ -2352,7 +2365,7 @@ void nv3_actualizarJugador() {
   }
 
   if (nv3_saltoPulsado && !aturdido && nv3_escalera < 0) {
-    nv3_bufferSalto = 4;
+    nv3_bufferSalto = 7;
   }
 
   if (
@@ -2379,7 +2392,6 @@ void nv3_actualizarJugador() {
   boolean jugadorListo = false;
 
   if (nv3_agarre > 0) {
-    nv3_direccionSalto = 0;
     nv3_bufferSalto = 0;
 
     nv3_actualizarAgarre();
@@ -2403,16 +2415,14 @@ void nv3_actualizarJugador() {
 
     if (nv3_suelo >= 0 && !aturdido) {
       nv3_vx = nv3_horizontal * velocidad;
-      nv3_velocidadAire = velocidad;
     }
 
-    // Inercia estricta durante el salto.
     if (nv3_suelo < 0 && nv3_escalera < 0 && !aturdido) {
-      nv3_vx = nv3_direccionSalto * nv3_velocidadAire;
+      float ajuste = nv3_horizontal * velocidad - nv3_vx;
+      nv3_vx += constrain(ajuste, -nv3_CONTROL_AIRE, nv3_CONTROL_AIRE);
     }
 
-    if (nv3_vx > 0) nv3_mirada = 1;
-    if (nv3_vx < 0) nv3_mirada = -1;
+    if (nv3_horizontal != 0) nv3_mirada = nv3_horizontal;
 
     if (nv3_escalera < 0 && nv3_vertical != 0) {
       int nv3_e = 0;
@@ -2427,7 +2437,6 @@ void nv3_actualizarJugador() {
             (nv3_vertical > 0 && nv3_py < nv3_pieEscalera(nv3_e) - 2)
           ) {
             nv3_escalera = nv3_e;
-            nv3_direccionSalto = 0;
             nv3_suelo = -1;
 
             nv3_vy = 0;
@@ -2493,8 +2502,7 @@ void nv3_actualizarJugador() {
         }
 
         if (!jugadorListo) {
-          nv3_direccionSalto = nv3_signo(nv3_vx + empuje);
-          nv3_velocidadAire = abs(nv3_vx + empuje);
+          nv3_vx += empuje;
 
           nv3_suelo = -1;
           nv3_saltos = 1;
@@ -2524,8 +2532,8 @@ void nv3_actualizarJugador() {
           nv3_suelo = nv3_p;
           nv3_saltos = 0;
 
-          if (impacto > 8.5) {
-            nv3_aturdimiento = 20;
+          if (impacto > 9.5) {
+            nv3_aturdimiento = 14;
             nv3_vx = 0;
             nv3_bufferSalto = 0;
 
@@ -2561,11 +2569,6 @@ void nv3_saltarDesdeSuelo() {
   nv3_suelo = -1;
   nv3_saltos = 1;
   nv3_bufferSalto = 0;
-
-  nv3_direccionSalto = nv3_ejeX();
-  nv3_velocidadAire = max(nv3_rapidez, abs(nv3_vx));
-
-  nv3_vx = nv3_direccionSalto * nv3_velocidadAire;
 
   nv3_sonar(nv3_sfxSalto);
 }
@@ -2811,7 +2814,6 @@ void nv3_recibirGolpe(boolean nv3_caida, float nv3_origenX) {
       nv3_px = constrain(nv3_px + direccion * 35, 32, 928);
 
       nv3_vx = 0;
-      nv3_direccionSalto = 0;
 
       if (nv3_escalera >= 0) {
         nv3_escalera = -1;
@@ -2842,7 +2844,10 @@ void nv3_recibirGolpe(boolean nv3_caida, float nv3_origenX) {
       if (nv3_vidas == 0) {
         nv3_sonar(nv3_sfxGameover);
         nv3_intentosFase++;
-        if (nv3_intentosFase < 2) nv3_pantalla = 4;
+        if (nv3_intentosFase < 2) {
+          nv3_pantalla = 4;
+          reaccionClipAlResultado(false);
+        }
         if (nv3_intentosFase >= 2) iniciarFinalNivel3(false);
         nv3_limpiarControles();
       }
@@ -2859,6 +2864,10 @@ void nv3_recibirGolpe(boolean nv3_caida, float nv3_origenX) {
 // BARRILES
 // ============================================================
 
+int nv3_intervaloBarriles() {
+  return 158 - nv3_fase * 15;
+}
+
 void nv3_actualizarBarriles() {
   nv3_esperaBarril--;
 
@@ -2874,7 +2883,7 @@ void nv3_actualizarBarriles() {
       b++;
     }
 
-    nv3_esperaBarril = 140 - nv3_fase * 15;
+    nv3_esperaBarril = nv3_intervaloBarriles();
   }
 
   int nv3_i = 0;
@@ -3221,15 +3230,19 @@ void nv3_panel(float nv3_x, float nv3_y, float nv3_w, float nv3_h, int nv3_borde
 void nv3_fondoDecorativo() {
   noStroke();
 
+  final int fondoX = 30, fondoY = 117, fondoW = 900, fondoH = 620;
+  fill(28, 33, 56);
   for (int nv3_x = 24; nv3_x < nv3Ancho; nv3_x += 32) {
+    boolean columnaInterior = nv3_x > fondoX && nv3_x + 2 < fondoX + fondoW;
     for (int nv3_y = 20; nv3_y < 745; nv3_y += 32) {
-      fill(28, 33, 56);
-      rect(nv3_x, nv3_y, 2, 2);
+      if (!columnaInterior || nv3_y <= fondoY || nv3_y + 2 >= fondoY + fondoH) {
+        rect(nv3_x, nv3_y, 2, 2);
+      }
     }
   }
 
   fill(18, 21, 40);
-  rect(30, 117, 900, 620);
+  rect(fondoX, fondoY, fondoW, fondoH);
 
   if (nv3_fase == 2) {
     stroke(37, 53, 78);
@@ -3547,7 +3560,7 @@ void nv3_dibujarPersonaje(
   pushMatrix();
 
   translate(round(nv3_x), round(nv3_y));
-  scale(nv3_escala);
+  scale(nv3_dir * nv3_escala, nv3_escala);
 
   noStroke();
 
@@ -3628,7 +3641,7 @@ void nv3_dibujarPersonaje(
   }
 
   fill(24, 26, 48);
-  rect(1 + nv3_dir * 3, -31, 3, 3);
+  rect(4, -31, 3, 3);
 
   popMatrix();
 }
